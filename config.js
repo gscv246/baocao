@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * TỆP CẤU HÌNH HỆ THỐNG GIÁM SÁT CÔNG VIỆC THẨM ĐỊNH (SERVERLESS REALTIME 24/24)
+ * TỆP CẤU HÌNH HỆ THỐNG GIÁM SÁT CÔNG VIỆC (REALTIME 24/24)
  * ==============================================================================
  */
 
@@ -17,7 +17,11 @@ const APP_CONFIG = {
   // 3. Mật mã Quản trị viên (Admin PIN) để vào trang quản trị
   ADMIN_PIN: "123456",
 
-  // 4. Danh sách cán bộ khởi tạo ban đầu
+  // 4. Cấu hình Đồng Bộ Google Drive & Google Sheets (Tùy chọn)
+  // URL Web App triển khai từ Google Apps Script (Code.gs)
+  GOOGLE_DRIVE_URL: "",
+
+  // 5. Danh sách cán bộ khởi tạo ban đầu
   INITIAL_OFFICERS: [
     { code: "CB01", name: "Nguyễn Văn An", phone: "0901234501", pin: "123456", status: "active" },
     { code: "CB02", name: "Trần Đình Bảo", phone: "0901234502", pin: "123456", status: "active" },
@@ -31,11 +35,11 @@ const APP_CONFIG = {
     { code: "CB10", name: "Trịnh Công Minh", phone: "0901234510", pin: "123456", status: "active" }
   ],
 
-  // 5. Các trạng thái công việc
+  // 6. Các trạng thái công việc
   STATUS_OPTIONS: [
     { label: "Đạt yêu cầu", badgeClass: "bg-success" },
     { label: "Chờ bổ sung hồ sơ", badgeClass: "bg-warning text-dark" },
     { label: "Không đạt / Từ chối", badgeClass: "bg-danger" },
-    { label: "Cần thẩm định lại", badgeClass: "bg-info text-dark" }
+    { label: "Cần kiểm tra lại", badgeClass: "bg-info text-dark" }
   ]
 };

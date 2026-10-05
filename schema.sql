@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS public.reports (
     end_time TIME NOT NULL,
     task_description TEXT NOT NULL,
     task_result TEXT NOT NULL,
-    status TEXT DEFAULT 'Đạt yêu cầu', -- 'Đạt yêu cầu', 'Chờ bổ sung', 'Không đạt', 'Cần thẩm định lại'
+    status TEXT DEFAULT 'Đạt yêu cầu', -- 'Đạt yêu cầu', 'Chờ bổ sung', 'Không đạt', 'Cần kiểm tra lại'
     image_url TEXT DEFAULT '',
     latitude NUMERIC(10, 7) DEFAULT NULL,
     longitude NUMERIC(10, 7) DEFAULT NULL,

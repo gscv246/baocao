@@ -1,7 +1,7 @@
 /**
  * ==============================================================================
- * HỆ THỐNG GIÁM SÁT CÔNG VIỆC CÁN BỘ THẨM ĐỊNH HIỆN TRƯỜNG
- * Nền tảng: Google Apps Script + Google Sheets + Google Drive
+ * HỆ THỐNG GIÁM SÁT CÔNG VIỆC CÁN BỘ HIỆN TRƯỜNG
+ * Cổng Đồng Bộ Dữ Liệu Tự Động Lên Google Drive & Google Sheets
  * Tác giả: Senior Full-stack Developer
  * ==============================================================================
  */
@@ -9,94 +9,229 @@
 // ------------------------------------------------------------------------------
 // CẤU HÌNH HỆ THỐNG
 // ------------------------------------------------------------------------------
-// Đổi email này thành email Google của Admin / Trưởng nhóm quản lý
-const ADMIN_EMAIL = "admin@example.com"; 
-
-// Tên trang tính lưu trữ cơ sở dữ liệu
+// Tên trang tính lưu trữ cơ sở dữ liệu trên Google Sheets
 const SHEET_NAME = "Du_Lieu_Tong";
 
-// Tên thư mục lưu trữ ảnh chụp trên Google Drive
-const DRIVE_FOLDER_NAME = "Hinh_Anh_Giam_Sat_Tham_Dinh";
+// Tên thư mục lưu trữ hình ảnh trên Google Drive
+const DRIVE_FOLDER_NAME = "Hinh_Anh_Giam_Sat_Cong_Viec";
 
 /**
- * 1. HÀM KHỞI CHẠY WEB APP (doGet)
- * Nhận request từ trình duyệt, kiểm tra quyền email và trả về giao diện tương ứng
+ * 1. HÀM TIẾP NHẬN REQUEST GET (doGet)
+ * Cho phép kiểm tra trạng thái hoạt động của Web App
  */
 function doGet(e) {
+  if (e && e.parameter && e.parameter.action === "ping") {
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "success",
+      message: "Kết nối Google Apps Script & Google Drive thành công!",
+      timestamp: new Date().toISOString()
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  return HtmlService.createHtmlOutput(
+    "<div style='font-family: sans-serif; text-align: center; padding: 40px;'>" +
+    "<h2 style='color: #1e40af;'>Hệ Thống Giám Sát Công Việc</h2>" +
+    "<p style='color: #059669; font-weight: bold;'>✓ Cổng Web App kết nối Google Drive & Sheets đang hoạt động 24/24.</p>" +
+    "<p style='color: #64748b;'>Địa chỉ Web App chính thức: <a href='https://gscv246.github.io/baocao/'>https://gscv246.github.io/baocao/</a></p>" +
+    "</div>"
+  ).setTitle("Hệ Thống Giám Sát Công Việc");
+}
+
+/**
+ * 2. HÀM TIẾP NHẬN ĐỒNG BỘ DỮ LIỆU TỪ WEB APP GITHUB PAGES (doPost)
+ * Nhận request JSON từ https://gscv246.github.io/baocao/
+ * Tự động tạo thư mục trên Google Drive, upload ảnh và ghi dòng mới vào Google Sheets
+ */
+function doPost(e) {
   try {
-    // Tự động kiểm tra và khởi tạo bảng dữ liệu nếu chưa có
     ensureDatabaseExists();
 
-    // Lấy email của người dùng đang đăng nhập
-    var userEmail = Session.getActiveUser().getEmail() || "";
-    
-    // Kiểm tra xem người dùng hiện tại có phải là Admin hay không
-    var isAdmin = false;
-    if (userEmail && ADMIN_EMAIL) {
-      isAdmin = (userEmail.trim().toLowerCase() === ADMIN_EMAIL.trim().toLowerCase());
+    var payload = {};
+    if (e && e.postData && e.postData.contents) {
+      payload = JSON.parse(e.postData.contents);
+    } else if (e && e.parameter) {
+      payload = e.parameter;
     }
 
-    // Nạp tệp giao diện HTML và truyền biến sang Frontend
-    var template = HtmlService.createTemplateFromFile("index");
-    template.userEmail = userEmail;
-    template.isAdmin = isAdmin;
-    template.adminEmail = ADMIN_EMAIL;
+    var action = payload.action || "SYNC_REPORT";
 
-    // Render HTML với các cài đặt chuẩn cho thiết bị di động
-    return template.evaluate()
-      .setTitle("Hệ Thống Giám Sát Công Việc Thẩm Định")
-      .addMetaTag("viewport", "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no")
-      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+    // A. Kiểm tra kết nối (PING)
+    if (action === "PING") {
+      var currentEmail = Session.getActiveUser().getEmail() || "Tài khoản Google sở hữu";
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        message: "Kết nối tài khoản Google Drive thành công!",
+        account: currentEmail,
+        timestamp: new Date().toISOString()
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // B. Đồng bộ 1 báo cáo (SYNC_REPORT)
+    if (action === "SYNC_REPORT") {
+      var report = payload.report || payload;
+      var result = saveReportToDriveAndSheet(report);
+      return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // C. Đồng bộ hàng loạt nhiều báo cáo (SYNC_ALL)
+    if (action === "SYNC_ALL") {
+      var reportsList = payload.reports || [];
+      var successCount = 0;
+      var errorList = [];
+
+      for (var i = 0; i < reportsList.length; i++) {
+        try {
+          var res = saveReportToDriveAndSheet(reportsList[i]);
+          if (res.status === "success") successCount++;
+        } catch (err) {
+          errorList.push(err.toString());
+        }
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        status: "success",
+        message: "Đã đồng bộ thành công " + successCount + "/" + reportsList.length + " báo cáo lên Google Drive & Sheets!",
+        successCount: successCount,
+        total: reportsList.length,
+        errors: errorList
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: "Hành động không hợp lệ: " + action
+    })).setMimeType(ContentService.MimeType.JSON);
+
   } catch (error) {
-    return HtmlService.createHtmlOutput("<h3 style='color:red;'>Lỗi khởi động hệ thống: " + error.toString() + "</h3>");
+    return ContentService.createTextOutput(JSON.stringify({
+      status: "error",
+      message: "Lỗi xử lý máy chủ Google Apps Script: " + error.toString()
+    })).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
 /**
- * 2. TỰ ĐỘNG KHỞI TẠO CƠ SỞ DỮ LIỆU GOOGLE SHEETS
- * Đảm bảo Sheet 'Du_Lieu_Tong' luôn tồn tại với đầy đủ các cột A -> H
+ * 3. HÀM LƯU TỪNG BÁO CÁO VÀO GOOGLE DRIVE VÀ GOOGLE SHEETS
+ */
+function saveReportToDriveAndSheet(report) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    ensureDatabaseExists();
+    sheet = ss.getSheetByName(SHEET_NAME);
+  }
+
+  var officerName = report.officer_name || report.officerName || "Chưa rõ";
+  var customerName = report.customer_name || report.customerName || "";
+  var address = report.address || "";
+  var startDate = report.start_date || report.startDate || "";
+  var startTime = report.start_time || report.startTime || "";
+  var endDate = report.end_date || report.endDate || "";
+  var endTime = report.end_time || report.endTime || "";
+  var taskDescription = report.task_description || report.taskDescription || "";
+  var taskResult = report.task_result || report.taskResult || "";
+  var status = report.status || "Đạt yêu cầu";
+  var lat = report.latitude || "";
+  var lng = report.longitude || "";
+  var gpsText = (lat && lng) ? (lat + ", " + lng) : "";
+  var createdAt = report.created_at || report.recordTime || Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
+
+  // Xử lý tệp hình ảnh: Upload lên Google Drive nếu là Data URL base64
+  var imageUrl = report.image_url || report.imageUrl || "";
+  var driveFileUrl = imageUrl;
+
+  if (imageUrl && imageUrl.indexOf("data:image") === 0) {
+    try {
+      var folder = getOrCreateFolder(DRIVE_FOLDER_NAME);
+      var parts = imageUrl.split(",");
+      var base64Data = parts[1];
+      var contentType = parts[0].split(";")[0].split(":")[1] || "image/jpeg";
+
+      var decoded = Utilities.base64Decode(base64Data);
+      var blob = Utilities.newBlob(decoded, contentType);
+
+      var safeOfficer = officerName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9]/g, "_");
+      var fileName = safeOfficer + "_" + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "yyyyMMdd_HHmmss") + ".jpg";
+      blob.setName(fileName);
+
+      var driveFile = folder.createFile(blob);
+      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      driveFileUrl = driveFile.getUrl();
+    } catch (imgErr) {
+      console.warn("Lỗi lưu ảnh lên Drive:", imgErr);
+    }
+  }
+
+  // Ghi hàng dữ liệu mới vào Google Sheets
+  var rowData = [
+    officerName,      // Cột A: Cán bộ thực hiện
+    customerName,     // Cột B: Khách hàng / Công việc
+    address,          // Cột C: Địa chỉ thực tế
+    startDate,        // Cột D: Ngày bắt đầu
+    startTime,        // Cột E: Giờ bắt đầu
+    endDate,          // Cột F: Ngày kết thúc
+    endTime,          // Cột G: Giờ kết thúc
+    taskDescription,  // Cột H: Nội dung công việc
+    taskResult,       // Cột I: Kết quả thực hiện
+    status,           // Cột J: Đánh giá trạng thái
+    driveFileUrl,     // Cột K: Link ảnh trên Google Drive
+    gpsText,          // Cột L: Tọa độ GPS hiện trường
+    createdAt         // Cột M: Thời gian nộp báo cáo
+  ];
+
+  sheet.appendRow(rowData);
+
+  return {
+    status: "success",
+    message: "Đã lưu vào Google Drive & Google Sheets thành công!",
+    driveUrl: driveFileUrl,
+    sheetUrl: ss.getUrl()
+  };
+}
+
+/**
+ * 4. TỰ ĐỘNG KHỞI TẠO CƠ SỞ DỮ LIỆU GOOGLE SHEETS
  */
 function ensureDatabaseExists() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheet = ss.getSheetByName(SHEET_NAME);
 
-  // Danh sách các cột theo đúng yêu cầu nghiệp vụ
   var headers = [
-    "Tên cán bộ",        // Cột A
-    "Ngày thực hiện",    // Cột B
-    "Giờ thực hiện",     // Cột C
-    "Ngày kết thúc",     // Cột D
-    "Giờ kết thúc",      // Cột E
-    "Công việc thực hiện",// Cột F
-    "Kết quả thực hiện", // Cột G
-    "Hình ảnh đính kèm", // Cột H
-    "Thời gian ghi nhận" // Cột I (Metadata bổ sung để sắp xếp/kiểm toán)
+    "Cán bộ thực hiện",      // Cột A
+    "Khách hàng / Công việc",// Cột B
+    "Địa chỉ",               // Cột C
+    "Ngày bắt đầu",          // Cột D
+    "Giờ bắt đầu",           // Cột E
+    "Ngày kết thúc",         // Cột F
+    "Giờ kết thúc",          // Cột G
+    "Nội dung công việc",    // Cột H
+    "Kết quả thực hiện",     // Cột I
+    "Đánh giá",              // Cột J
+    "Hình ảnh Google Drive", // Cột K
+    "Tọa độ GPS",            // Cột L
+    "Thời gian nộp"          // Cột M
   ];
 
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME);
-    // Ghi tiêu đề cột
     sheet.appendRow(headers);
     
-    // Định dạng dòng tiêu đề: In đậm, nền xanh chuyên nghiệp, căn giữa
     var headerRange = sheet.getRange(1, 1, 1, headers.length);
     headerRange.setFontWeight("bold");
-    headerRange.setBackground("#1e3a8a"); // Xanh Navy
+    headerRange.setBackground("#1e40af"); // Xanh Navy
     headerRange.setFontColor("#ffffff");
     headerRange.setHorizontalAlignment("center");
-    sheet.setFrozenRows(1); // Cố định dòng tiêu đề
+    sheet.setFrozenRows(1);
     
-    // Tự động điều chỉnh độ rộng cột
     for (var i = 1; i <= headers.length; i++) {
       sheet.autoResizeColumn(i);
     }
   } else {
-    // Nếu sheet đã có nhưng hàng 1 rỗng thì tạo header
     if (sheet.getLastRow() === 0) {
       sheet.appendRow(headers);
       var range = sheet.getRange(1, 1, 1, headers.length);
       range.setFontWeight("bold");
-      range.setBackground("#1e3a8a");
+      range.setBackground("#1e40af");
       range.setFontColor("#ffffff");
       range.setHorizontalAlignment("center");
       sheet.setFrozenRows(1);
@@ -105,192 +240,14 @@ function ensureDatabaseExists() {
 }
 
 /**
- * HÀM PHỤ TRỢ: LẤY HOẶC TẠO THƯ MỤC TRÊN GOOGLE DRIVE
+ * 5. LẤY HOẶC TẠO THƯ MỤC TRÊN GOOGLE DRIVE
  */
 function getOrCreateFolder(folderName) {
   var folders = DriveApp.getFoldersByName(folderName);
   if (folders.hasNext()) {
     return folders.next();
   }
-  // Tạo thư mục mới nếu chưa tồn tại
   var newFolder = DriveApp.createFolder(folderName);
-  // Cài đặt chia sẻ: Bất kỳ ai có đường link đều có thể xem ảnh
   newFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
   return newFolder;
-}
-
-/**
- * 3. HÀM XỬ LÝ NHẬN FORM TỪ CÁN BỘ (processForm)
- * Nhận form data, upload ảnh lên Google Drive và ghi dữ liệu vào Google Sheets
- */
-function processForm(formObject) {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName(SHEET_NAME);
-    if (!sheet) {
-      ensureDatabaseExists();
-      sheet = ss.getSheetByName(SHEET_NAME);
-    }
-
-    // 1. Trích xuất thông tin văn bản từ Form
-    var officerName = formObject.officerName ? formObject.officerName.trim() : "Chưa xác định";
-    var startDate = formObject.startDate || "";
-    var startTime = formObject.startTime || "";
-    var endDate = formObject.endDate || "";
-    var endTime = formObject.endTime || "";
-    var taskDescription = formObject.taskDescription ? formObject.taskDescription.trim() : "";
-    var taskResult = formObject.taskResult ? formObject.taskResult.trim() : "";
-
-    // 2. Xử lý tệp hình ảnh đính kèm
-    var imageUrl = "Không có ảnh";
-    var fileId = "";
-    
-    if (formObject.imageFile && formObject.imageFile.length > 0) {
-      var folder = getOrCreateFolder(DRIVE_FOLDER_NAME);
-      var imageBlob = formObject.imageFile;
-
-      // Chuẩn hóa tên cán bộ thành không dấu để đặt tên file an toàn
-      var safeOfficerName = officerName
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-zA-Z0-9]/g, "_");
-
-      // Định dạng thời gian tạo file: YYYYMMDD_HHmmss
-      var now = new Date();
-      var timeStampStr = Utilities.formatDate(now, Session.getScriptTimeZone(), "yyyyMMdd_HHmmss");
-      
-      // Lấy đuôi file gốc (vd: .jpg, .png)
-      var originalFileName = imageBlob.getName() || "photo.jpg";
-      var ext = "";
-      var dotIndex = originalFileName.lastIndexOf(".");
-      if (dotIndex !== -1) {
-        ext = originalFileName.substring(dotIndex);
-      } else {
-        ext = ".jpg";
-      }
-
-      // Quy chuẩn tên file: [TênCánBộ]_[ThờiGian]_[TênGốc]
-      var newFileName = safeOfficerName + "_" + timeStampStr + ext;
-      
-      // Tạo file trên Google Drive
-      var driveFile = folder.createFile(imageBlob);
-      driveFile.setName(newFileName);
-      
-      // Mở quyền xem cho bất kỳ ai có link để hiển thị trực tiếp trên giao diện Admin
-      driveFile.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      
-      fileId = driveFile.getId();
-      // Link xem trực tiếp hoặc tải
-      imageUrl = driveFile.getUrl();
-    }
-
-    // 3. Ghi dòng dữ liệu mới vào Google Sheets
-    var recordTime = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss");
-    var rowData = [
-      officerName,      // Cột A
-      startDate,        // Cột B
-      startTime,        // Cột C
-      endDate,          // Cột D
-      endTime,          // Cột E
-      taskDescription,  // Cột F
-      taskResult,       // Cột G
-      imageUrl,         // Cột H
-      recordTime        // Cột I
-    ];
-
-    sheet.appendRow(rowData);
-
-    return {
-      status: "success",
-      message: "Đã gửi báo cáo giám sát thành công!",
-      officer: officerName,
-      imageUrl: imageUrl
-    };
-
-  } catch (error) {
-    return {
-      status: "error",
-      message: "Lỗi hệ thống khi lưu báo cáo: " + error.toString()
-    };
-  }
-}
-
-/**
- * 4. HÀM LẤY TOÀN BỘ DỮ LIỆU CHO PHÍA ADMIN (getAdminData)
- * Đọc tất cả báo cáo từ Sheet và chuẩn hóa dữ liệu trả về cho giao diện Admin
- */
-function getAdminData() {
-  try {
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName(SHEET_NAME);
-    if (!sheet) {
-      return { status: "success", data: [] };
-    }
-
-    var lastRow = sheet.getLastRow();
-    if (lastRow <= 1) {
-      return { status: "success", data: [] }; // Chỉ có dòng tiêu đề hoặc rỗng
-    }
-
-    // Lấy toàn bộ dữ liệu từ hàng 2 đến hết
-    var range = sheet.getRange(2, 1, lastRow - 1, 9);
-    var values = range.getValues();
-    var reports = [];
-
-    // Duyệt ngược từ dòng mới nhất lên dòng cũ nhất
-    for (var i = values.length - 1; i >= 0; i--) {
-      var row = values[i];
-      var rawImgUrl = row[7] ? String(row[7]) : "";
-      var fileId = "";
-      
-      // Trích xuất File ID từ Drive URL để tạo thumbnail hiển thị mượt mà
-      var matchId = rawImgUrl.match(/[-\w]{25,}/);
-      if (matchId) {
-        fileId = matchId[0];
-      }
-
-      // Xử lý định dạng ngày tháng hiển thị
-      var formatDisplayDate = function(val) {
-        if (val instanceof Date) {
-          return Utilities.formatDate(val, Session.getScriptTimeZone(), "dd/MM/yyyy");
-        }
-        return val ? String(val) : "";
-      };
-
-      var formatDisplayTime = function(val) {
-        if (val instanceof Date) {
-          return Utilities.formatDate(val, Session.getScriptTimeZone(), "HH:mm");
-        }
-        return val ? String(val) : "";
-      };
-
-      reports.push({
-        id: (values.length - i),
-        officerName: row[0] ? String(row[0]) : "Chưa rõ",
-        startDate: formatDisplayDate(row[1]),
-        startTime: formatDisplayTime(row[2]),
-        endDate: formatDisplayDate(row[3]),
-        endTime: formatDisplayTime(row[4]),
-        taskDescription: row[5] ? String(row[5]) : "",
-        taskResult: row[6] ? String(row[6]) : "",
-        imageUrl: rawImgUrl,
-        fileId: fileId,
-        thumbnailUrl: fileId ? "https://drive.google.com/thumbnail?id=" + fileId + "&sz=w300" : "",
-        recordTime: row[8] instanceof Date ? Utilities.formatDate(row[8], Session.getScriptTimeZone(), "dd/MM/yyyy HH:mm:ss") : String(row[8] || "")
-      });
-    }
-
-    return {
-      status: "success",
-      total: reports.length,
-      data: reports
-    };
-
-  } catch (error) {
-    return {
-      status: "error",
-      message: "Không thể lấy dữ liệu quản trị: " + error.toString(),
-      data: []
-    };
-  }
 }

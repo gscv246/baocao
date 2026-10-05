@@ -33,6 +33,7 @@ let lockoutCountdownInterval = null;
 document.addEventListener("DOMContentLoaded", () => {
   initSystem();
   loadOfficersData();
+  initGoogleDriveSettings();
   initDateTimeFields();
   setupEventListeners();
   checkUserAuthenticationSession();
@@ -766,7 +767,18 @@ async function handleFormSubmit(event) {
       data: reportData
     });
 
-    // 3. Lưu vào Supabase nếu có
+    // 3. Tự động đồng bộ lên Google Drive & Google Sheets nếu được bật
+    if (isAutoSyncDriveEnabled()) {
+      syncSingleReportToGoogleDrive(reportData).then(res => {
+        if (res && res.status === "success") {
+          console.log("Đã tự động đồng bộ báo cáo lên Google Drive thành công:", reportData.id);
+        }
+      }).catch(err => {
+        console.warn("Lỗi tự động đồng bộ Google Drive:", err);
+      });
+    }
+
+    // 4. Lưu vào Supabase nếu có
     if (isConfigured && supabaseClient) {
       await supabaseClient.from("reports").insert([reportData]);
     }
@@ -2233,4 +2245,245 @@ function showToast(message, type = "primary") {
 function escapeHtml(text) {
   if (!text) return "";
   return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+/**
+ * ==============================================================================
+ * 12. TÍNH NĂNG ĐỒNG BỘ DỮ LIỆU & HÌNH ẢNH LÊN GOOGLE DRIVE & GOOGLE SHEETS
+ * ==============================================================================
+ */
+
+/**
+ * Khởi tạo thiết lập Google Drive khi nạp trang
+ */
+function initGoogleDriveSettings() {
+  const savedUrl = localStorage.getItem("gscv_google_drive_url") || APP_CONFIG.GOOGLE_DRIVE_URL || "";
+  const inputEl = document.getElementById("googleDriveWebAppUrl");
+  if (inputEl) {
+    inputEl.value = savedUrl;
+  }
+
+  const autoSyncSaved = localStorage.getItem("gscv_google_drive_autosync");
+  const switchEl = document.getElementById("autoSyncDriveSwitch");
+  if (switchEl) {
+    switchEl.checked = autoSyncSaved !== null ? autoSyncSaved === "true" : true;
+  }
+}
+
+/**
+ * Lưu URL Web App của Google Apps Script
+ */
+function saveGoogleDriveSettings() {
+  const inputEl = document.getElementById("googleDriveWebAppUrl");
+  if (!inputEl) return;
+  const url = inputEl.value.trim();
+  localStorage.setItem("gscv_google_drive_url", url);
+  APP_CONFIG.GOOGLE_DRIVE_URL = url;
+  showToast("Đã lưu cấu hình Google Apps Script Web App thành công!", "success");
+}
+
+/**
+ * Bật/Tắt tự động đồng bộ Google Drive khi cán bộ nộp báo cáo
+ */
+function toggleAutoSyncDrive(checkboxEl) {
+  if (!checkboxEl) return;
+  localStorage.setItem("gscv_google_drive_autosync", checkboxEl.checked ? "true" : "false");
+  showToast(
+    checkboxEl.checked
+      ? "Đã bật tự động đồng bộ Google Drive & Sheets khi có báo cáo mới!"
+      : "Đã tắt tự động đồng bộ Google Drive.",
+    "info"
+  );
+}
+
+/**
+ * Lấy URL Google Drive Web App đã lưu
+ */
+function getGoogleDriveUrl() {
+  return localStorage.getItem("gscv_google_drive_url") || APP_CONFIG.GOOGLE_DRIVE_URL || "";
+}
+
+/**
+ * Kiểm tra xem có đang bật tự động đồng bộ Drive không
+ */
+function isAutoSyncDriveEnabled() {
+  const url = getGoogleDriveUrl();
+  if (!url) return false;
+  const saved = localStorage.getItem("gscv_google_drive_autosync");
+  return saved !== null ? saved === "true" : true;
+}
+
+/**
+ * Kiểm tra kết nối (Ping) đến Google Apps Script
+ */
+async function testGoogleDriveConnection() {
+  const driveUrl = getGoogleDriveUrl();
+  if (!driveUrl) {
+    showToast("Vui lòng nhập URL Web App của Google Apps Script trước!", "warning");
+    return;
+  }
+
+  showToast("Đang kiểm tra kết nối tới Google Drive...", "info");
+  const statusBox = document.getElementById("driveSyncStatusBox");
+  const statusText = document.getElementById("driveSyncStatusText");
+  const badge = document.getElementById("driveSyncPercentBadge");
+  const progress = document.getElementById("driveSyncProgressBar");
+  const logDetail = document.getElementById("driveSyncLogDetail");
+
+  if (statusBox) statusBox.classList.remove("d-none");
+  if (statusText) statusText.innerText = "Đang kiểm tra máy chủ Google Apps Script...";
+  if (badge) badge.innerText = "Đang ping...";
+  if (progress) {
+    progress.style.width = "40%";
+    progress.className = "progress-bar progress-bar-striped progress-bar-animated bg-info";
+  }
+
+  try {
+    const testUrl = driveUrl + (driveUrl.includes("?") ? "&" : "?") + "action=PING&t=" + Date.now();
+    const res = await fetch(testUrl);
+    const data = await res.json();
+
+    if (data.status === "success") {
+      if (progress) {
+        progress.style.width = "100%";
+        progress.className = "progress-bar bg-success";
+      }
+      if (badge) badge.innerText = "Kết nối tốt";
+      if (statusText) statusText.innerText = "Kết nối Google Drive hoàn hảo!";
+      if (logDetail) {
+        logDetail.innerHTML = `<span class="text-success"><i class="bi bi-check-circle-fill me-1"></i>Tài khoản Google: <strong>${escapeHtml(data.user || "Google Account")}</strong></span>`;
+      }
+      showToast(`Kết nối thành công tới tài khoản: ${data.user || "Google"}`, "success");
+    } else {
+      throw new Error(data.message || "Phản hồi không xác định");
+    }
+  } catch (err) {
+    console.error("Lỗi test kết nối Drive:", err);
+    if (progress) {
+      progress.style.width = "100%";
+      progress.className = "progress-bar bg-danger";
+    }
+    if (badge) badge.innerText = "Lỗi";
+    if (statusText) statusText.innerText = "Không thể kết nối!";
+    if (logDetail) {
+      logDetail.innerHTML = `<span class="text-danger"><i class="bi bi-exclamation-triangle-fill me-1"></i>Lỗi kết nối: ${escapeHtml(err.message)}.<br>Hãy chắc chắn khi Deploy Web App, bạn đã chọn <strong>Who has access = Anyone</strong>.</span>`;
+    }
+    showToast("Không thể kết nối! Kiểm tra lại quyền Deploy Web App = Anyone", "danger");
+  }
+}
+
+/**
+ * Đồng bộ 1 báo cáo đơn lẻ lên Google Drive và Google Sheets
+ */
+async function syncSingleReportToGoogleDrive(reportData) {
+  const driveUrl = getGoogleDriveUrl();
+  if (!driveUrl) return { success: false, message: "Chưa cấu hình URL Google Drive" };
+
+  try {
+    const payload = {
+      action: "SYNC_REPORT",
+      report: reportData
+    };
+
+    const response = await fetch(driveUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error("Lỗi gửi dữ liệu lên Google Drive Web App:", error);
+    return { success: false, message: error.message };
+  }
+}
+
+/**
+ * Đồng bộ toàn bộ dữ liệu báo cáo hiện có lên Google Drive & Google Sheets
+ */
+async function syncAllReportsToGoogleDrive() {
+  const driveUrl = getGoogleDriveUrl();
+  if (!driveUrl) {
+    showToast("Vui lòng cấu hình và lưu URL Web App Google Apps Script trước!", "warning");
+    const tabBtn = document.getElementById("tab-drive-btn");
+    if (tabBtn) new bootstrap.Tab(tabBtn).show();
+    return;
+  }
+
+  const reports = getLocalReports();
+  if (!reports || reports.length === 0) {
+    showToast("Hiện chưa có báo cáo nào trong hệ thống để đồng bộ!", "info");
+    return;
+  }
+
+  const statusBox = document.getElementById("driveSyncStatusBox");
+  const statusText = document.getElementById("driveSyncStatusText");
+  const badge = document.getElementById("driveSyncPercentBadge");
+  const progress = document.getElementById("driveSyncProgressBar");
+  const logDetail = document.getElementById("driveSyncLogDetail");
+
+  if (statusBox) statusBox.classList.remove("d-none");
+  if (progress) progress.className = "progress-bar progress-bar-striped progress-bar-animated bg-success";
+
+  let successCount = 0;
+  let failCount = 0;
+  const total = reports.length;
+
+  for (let i = 0; i < total; i++) {
+    const rep = reports[i];
+    const percent = Math.round(((i + 1) / total) * 100);
+
+    if (statusText) statusText.innerText = `Đang đồng bộ báo cáo ${i + 1}/${total}...`;
+    if (badge) badge.innerText = `${percent}%`;
+    if (progress) progress.style.width = `${percent}%`;
+    if (logDetail) {
+      logDetail.innerHTML = `Đang tải: <strong>${escapeHtml(rep.officer_name)}</strong> - KH: ${escapeHtml(rep.customer_name || "N/A")}`;
+    }
+
+    try {
+      const res = await fetch(driveUrl, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({
+          action: "SYNC_REPORT",
+          report: rep
+        })
+      });
+      const data = await res.json();
+      if (data.status === "success") {
+        successCount++;
+      } else {
+        failCount++;
+      }
+    } catch (e) {
+      console.warn("Lỗi đồng bộ báo cáo:", rep.id, e);
+      failCount++;
+    }
+  }
+
+  if (statusText) statusText.innerText = `Đã hoàn tất đồng bộ! (${successCount} thành công, ${failCount} lỗi)`;
+  if (logDetail) {
+    logDetail.innerHTML = `<span class="text-success"><i class="bi bi-cloud-check-fill me-1"></i>Đã tải ảnh lên thư mục Drive và cập nhật Google Sheet thành công!</span>`;
+  }
+  showToast(`Đã đồng bộ xong ${successCount}/${total} báo cáo lên Google Drive & Sheets!`, "success");
+}
+
+/**
+ * Nút bấm nhanh trên thanh công cụ Admin
+ */
+function triggerGoogleDriveQuickSync() {
+  const tabBtn = document.getElementById("tab-drive-btn");
+  if (tabBtn) {
+    const tabTrigger = new bootstrap.Tab(tabBtn);
+    tabTrigger.show();
+  }
+  const driveUrl = getGoogleDriveUrl();
+  if (!driveUrl) {
+    showToast("Vui lòng cấu hình URL Google Apps Script Web App để bắt đầu đồng bộ!", "info");
+    return;
+  }
+  syncAllReportsToGoogleDrive();
 }

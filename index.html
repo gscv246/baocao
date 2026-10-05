@@ -3,7 +3,20 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Hệ Thống Giám Sát Công Việc (Realtime 24/24)</title>
+  <title>Hệ Thống Giám Sát Công Việc</title>
+  <meta name="description" content="Hệ Thống Giám Sát Công Việc - Báo cáo hiện trường trực tuyến 24/24">
+
+  <!-- Open Graph / Zalo / Telegram / Facebook -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://gscv246.github.io/baocao/">
+  <meta property="og:title" content="Hệ Thống Giám Sát Công Việc">
+  <meta property="og:description" content="Hệ Thống Giám Sát Công Việc - Báo cáo hiện trường trực tuyến 24/24">
+  <meta property="og:site_name" content="Hệ Thống Giám Sát Công Việc">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Hệ Thống Giám Sát Công Việc">
+  <meta name="twitter:description" content="Hệ Thống Giám Sát Công Việc - Báo cáo hiện trường trực tuyến 24/24">
 
   <!-- Google Font: Be Vietnam Pro -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -576,9 +589,17 @@
                 <i class="bi bi-people-fill me-1"></i>Quản Lý Tài Khoản Cán Bộ
               </button>
             </li>
+            <li class="nav-item">
+              <button class="nav-link" id="tab-drive-btn" data-bs-toggle="tab" data-bs-target="#tab-drive" type="button">
+                <i class="bi bi-google me-1 text-danger"></i>Đồng Bộ Google Drive
+              </button>
+            </li>
           </ul>
 
           <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-primary btn-sm rounded-pill px-3 shadow-sm" onclick="triggerGoogleDriveQuickSync()" title="Đồng bộ ngay lên Google Drive & Sheets">
+              <i class="bi bi-google me-1 text-danger"></i>Đồng bộ Drive
+            </button>
             <button class="btn btn-success btn-sm rounded-pill px-3 shadow-sm" onclick="exportReportsToCSV()">
               <i class="bi bi-file-earmark-excel me-1"></i>Xuất Excel (.CSV)
             </button>
@@ -778,6 +799,99 @@
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 4: ĐỒNG BỘ GOOGLE DRIVE & GOOGLE SHEETS -->
+        <div class="tab-pane fade" id="tab-drive" role="tabpanel">
+          <div class="row g-4">
+            <!-- Cột trái: Cấu hình kết nối & Đồng bộ -->
+            <div class="col-lg-6 col-12">
+              <div class="custom-card h-100">
+                <div class="card-header bg-white py-3 border-bottom">
+                  <h6 class="mb-0 fw-bold text-success">
+                    <i class="bi bi-google me-2"></i>Cấu Hình Google Drive & Sheets
+                  </h6>
+                  <div class="small text-muted">Kết nối với Google Apps Script Web App để sao lưu tự động ảnh và dữ liệu</div>
+                </div>
+                <div class="card-body p-4">
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">URL Web App (Google Apps Script):</label>
+                    <div class="input-group">
+                      <span class="input-group-text bg-light"><i class="bi bi-link-45deg"></i></span>
+                      <input type="url" id="googleDriveWebAppUrl" class="form-control" placeholder="https://script.google.com/macros/s/.../exec">
+                      <button class="btn btn-primary" onclick="saveGoogleDriveSettings()">
+                        <i class="bi bi-check-lg me-1"></i>Lưu
+                      </button>
+                    </div>
+                    <div class="form-text text-muted">
+                      Dán đường link Web App được cấp sau khi Deploy từ file Code.gs của Google Sheet.
+                    </div>
+                  </div>
+
+                  <div class="form-check form-switch mb-4 p-3 bg-light rounded-3 border">
+                    <input class="form-check-input ms-0 me-3" type="checkbox" id="autoSyncDriveSwitch" onchange="toggleAutoSyncDrive(this)">
+                    <label class="form-check-label fw-semibold" for="autoSyncDriveSwitch">
+                      Tự động đồng bộ lên Google Drive khi cán bộ gửi báo cáo
+                    </label>
+                    <div class="small text-muted ps-1">Mỗi khi có báo cáo mới, ảnh và chi tiết công việc sẽ tự động chuyển sang thư mục Drive và Google Sheet.</div>
+                  </div>
+
+                  <div class="d-flex gap-2 flex-wrap mb-4">
+                    <button class="btn btn-outline-success" onclick="testGoogleDriveConnection()">
+                      <i class="bi bi-broadcast me-1"></i>Kiểm Tra Kết Nối (Ping)
+                    </button>
+                    <button class="btn btn-success" onclick="syncAllReportsToGoogleDrive()">
+                      <i class="bi bi-cloud-arrow-up-fill me-1"></i>Đồng Bộ Toàn Bộ Dữ Liệu Ngay
+                    </button>
+                  </div>
+
+                  <!-- Trạng thái kết nối & tiến trình -->
+                  <div id="driveSyncStatusBox" class="p-3 rounded-3 bg-light border d-none">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                      <span class="fw-semibold text-secondary" id="driveSyncStatusText">Đang chuẩn bị...</span>
+                      <span class="badge bg-primary" id="driveSyncPercentBadge">0%</span>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                      <div id="driveSyncProgressBar" class="progress-bar progress-bar-striped progress-bar-animated bg-success" role="progressbar" style="width: 0%"></div>
+                    </div>
+                    <div class="small text-muted mt-2" id="driveSyncLogDetail"></div>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+            <!-- Cột phải: Hướng dẫn tích hợp -->
+            <div class="col-lg-6 col-12">
+              <div class="custom-card h-100">
+                <div class="card-header bg-white py-3 border-bottom">
+                  <h6 class="mb-0 fw-bold text-dark">
+                    <i class="bi bi-info-circle-fill text-primary me-2"></i>Hướng Dẫn Tạo Kết Nối Google Drive (3 Phút)
+                  </h6>
+                  <div class="small text-muted">Hoàn toàn miễn phí, lưu trữ vĩnh viễn trên tài khoản Google của bạn</div>
+                </div>
+                <div class="card-body p-4">
+                  <ol class="ps-3 mb-0 small text-secondary lh-lg">
+                    <li>Mở <a href="https://sheets.new" target="_blank" class="fw-bold text-decoration-none">Google Sheets mới <i class="bi bi-box-arrow-up-right"></i></a> trên trình duyệt của bạn.</li>
+                    <li>Trên thanh menu của Google Sheet, chọn <strong>Tiện ích mở rộng (Extensions)</strong> &gt; <strong>Apps Script</strong>.</li>
+                    <li>Xóa toàn bộ mã mặc định trong Apps Script, copy toàn bộ nội dung từ file <code class="bg-light p-1 rounded text-dark">Code.gs</code> trong dự án này dán vào.</li>
+                    <li>Bấm nút <strong>Triển khai (Deploy)</strong> ở góc trên bên phải &gt; chọn <strong>Tùy chọn triển khai mới (New deployment)</strong>.</li>
+                    <li>Chọn loại là <strong>Web app</strong>:
+                      <ul class="mt-1">
+                        <li><strong>Execute as:</strong> Chọn <em>Me (Tôi)</em></li>
+                        <li><strong>Who has access:</strong> Chọn <em>Anyone (Bất kỳ ai)</em></li>
+                      </ul>
+                    </li>
+                    <li>Bấm <strong>Deploy</strong> &gt; Cho phép quyền truy cập (Authorize access) &gt; Copy <strong>Web app URL</strong>.</li>
+                    <li>Dán link Web app URL vừa copy vào ô bên cạnh và bấm <strong>Lưu</strong>.</li>
+                  </ol>
+                  <div class="alert alert-info mt-3 py-2 px-3 small mb-0">
+                    <i class="bi bi-shield-check me-1"></i>Hệ thống sẽ tự động tạo thư mục <strong>Hinh_Anh_Giam_Sat_Cong_Viec</strong> trong Google Drive của bạn để lưu từng ảnh báo cáo và chèn link xem ảnh trực tiếp vào bảng Google Sheets.
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
