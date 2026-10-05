@@ -323,6 +323,106 @@
         margin-top: 0.75rem;
       }
     }
+
+    /* ==================== LOGIN GATEWAY STYLES ==================== */
+    .login-gateway-container {
+      min-height: calc(100vh - 65px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+      background: radial-gradient(circle at 50% 25%, #1e3a8a 0%, #0f172a 100%);
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 460px;
+      background: #ffffff;
+      border-radius: 1.25rem;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      overflow: hidden;
+      animation: fadeInLogin 0.4s ease-out;
+    }
+
+    @keyframes fadeInLogin {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .login-card-header {
+      background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-color) 100%);
+      color: white;
+      padding: 1.75rem 1.5rem;
+      text-align: center;
+    }
+
+    .login-icon-badge {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 0.75rem;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(8px);
+      border: 2px solid rgba(255, 255, 255, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      color: #facc15;
+      box-shadow: 0 0 20px rgba(250, 204, 21, 0.35);
+    }
+
+    .login-nav-tabs {
+      display: flex;
+      background: #f1f5f9;
+      padding: 0.35rem;
+      border-radius: 0.75rem;
+      margin-bottom: 1.25rem;
+      gap: 0.25rem;
+    }
+
+    .login-nav-tab-btn {
+      flex: 1;
+      padding: 0.65rem 0.5rem;
+      border: none;
+      background: transparent;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      font-size: 0.88rem;
+      color: #64748b;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+    }
+
+    .login-nav-tab-btn.active {
+      background: #ffffff;
+      color: var(--primary-color);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+
+    .lockout-timer-box {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 0.75rem;
+      padding: 0.85rem;
+      color: #991b1b;
+      margin-bottom: 1rem;
+      animation: pulseAlert 2s infinite ease-in-out;
+    }
+
+    @keyframes pulseAlert {
+      0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.25); }
+      70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+
+    .password-toggle-addon {
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -343,28 +443,119 @@
           <span class="spinner-border spinner-border-sm me-1"></span> Đang kết nối...
         </span>
 
-        <!-- Trạng thái Admin đăng nhập -->
-        <div id="adminBadgeIndicator" class="d-none">
-          <span class="badge bg-danger text-white py-2 px-2 shadow-sm me-1">
-            <i class="bi bi-shield-lock-fill me-1"></i>ADMIN ACTIVE
-          </span>
-          <button class="btn btn-outline-light btn-sm" onclick="logoutAdmin()" title="Đăng xuất Admin">
-            <i class="bi bi-box-arrow-right"></i>
+        <!-- Cụm thông tin người dùng đã đăng nhập -->
+        <div id="userNavProfile" class="d-none d-flex align-items-center gap-2">
+          <div id="navRoleBadge"></div>
+          <button id="btnNavChangeAdminPass" class="btn btn-warning btn-sm rounded-pill shadow-sm d-none" onclick="openAdminChangePasswordModal(false)">
+            <i class="bi bi-key-fill me-1"></i>Đổi pass
+          </button>
+          <button class="btn btn-outline-light btn-sm rounded-pill shadow-sm px-2 px-sm-3" onclick="handleUserLogout()" title="Đăng xuất khỏi hệ thống">
+            <i class="bi bi-box-arrow-right me-1"></i>Đăng xuất
           </button>
         </div>
-
-        <button id="btnOpenAdminLogin" class="btn btn-warning btn-sm fw-semibold rounded-pill px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#adminLoginModal">
-          <i class="bi bi-key-fill me-1"></i>Quản Trị Viên
-        </button>
       </div>
     </div>
   </nav>
 
-  <!-- ==================== NỘI DUNG CHÍNH ==================== -->
-  <div class="main-container">
+  <!-- ==================== MÀN HÌNH ĐĂNG NHẬP (LOGIN GATEWAY) ==================== -->
+  <div id="loginGatewaySection" class="login-gateway-container">
+    <div class="login-card">
+      <div class="login-card-header">
+        <div class="login-icon-badge">
+          <i class="bi bi-shield-lock-fill"></i>
+        </div>
+        <h4 class="fw-bold mb-1">GIÁM SÁT CÔNG VIỆC</h4>
+        <div class="small text-white-50">Cổng đăng nhập & Xác thực hệ thống hiện trường</div>
+      </div>
 
-    <!-- ==================== KHU VỰC QUẢN TRỊ VIÊN (ADMIN DASHBOARD) ==================== -->
-    <div id="adminViewSection" class="d-none mb-4">
+      <div class="p-4">
+        <!-- Chuyển đổi vai trò đăng nhập -->
+        <div class="login-nav-tabs">
+          <button type="button" id="tabBtnOfficer" class="login-nav-tab-btn active" onclick="switchLoginRole('officer')">
+            <i class="bi bi-person-badge-fill"></i>Cán Bộ Thực Hiện
+          </button>
+          <button type="button" id="tabBtnAdmin" class="login-nav-tab-btn" onclick="switchLoginRole('admin')">
+            <i class="bi bi-shield-lock-fill"></i>Quản Trị Viên
+          </button>
+        </div>
+
+        <!-- Hộp cảnh báo an ninh động (Đếm ngược 15p hoặc khóa 10 lần) -->
+        <div id="loginSecurityAlert" class="d-none"></div>
+
+        <form id="gatewayLoginForm" onsubmit="handleGatewayLogin(event)">
+          <!-- VÙNG TÀI KHOẢN CÁN BỘ -->
+          <div id="officerLoginFields">
+            <div class="mb-3">
+              <label for="loginOfficerSelect" class="form-label small fw-semibold text-dark">
+                <i class="bi bi-person-check text-primary me-1"></i>Chọn Cán bộ được cấp tài khoản (*):
+              </label>
+              <select id="loginOfficerSelect" class="form-select" onchange="onLoginOfficerSelectChange()">
+                <option value="">-- Đang nạp danh sách cán bộ... --</option>
+              </select>
+              <div class="d-flex justify-content-between align-items-center mt-1">
+                <span class="small text-muted">Hoặc nhập mã / SĐT:</span>
+                <a href="javascript:void(0)" class="small text-decoration-none" onclick="toggleCustomOfficerInput()">Nhập thủ công</a>
+              </div>
+              <input type="text" id="loginCustomOfficerInput" class="form-control mt-1 d-none text-uppercase" placeholder="VD: CB01 hoặc Số điện thoại" oninput="onCustomOfficerInputChange()">
+            </div>
+          </div>
+
+          <!-- VÙNG TÀI KHOẢN ADMIN -->
+          <div id="adminLoginFields" class="d-none">
+            <div class="mb-3">
+              <label class="form-label small fw-semibold text-dark">
+                <i class="bi bi-shield-check text-danger me-1"></i>Tài khoản Quản trị:
+              </label>
+              <input type="text" class="form-control bg-light" value="admin (Quản trị hệ thống)" readonly>
+            </div>
+          </div>
+
+          <!-- MẬT KHẨU / MÃ PIN XÁC THỰC -->
+          <div class="mb-3">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <label for="loginPasswordInput" class="form-label small fw-semibold text-dark mb-0">
+                <i class="bi bi-key-fill text-warning me-1"></i>Mật khẩu truy cập (*):
+              </label>
+              <span id="loginAttemptsBadge" class="small text-muted"></span>
+            </div>
+            <div class="input-group">
+              <input type="password" id="loginPasswordInput" class="form-control" placeholder="Nhập mật khẩu..." required autocomplete="current-password">
+              <button class="btn btn-outline-secondary password-toggle-addon" type="button" onclick="togglePasswordVisibility('loginPasswordInput')">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+            <div class="form-text small" id="loginPinHintText">Mật khẩu PIN mặc định: 123456 (hoặc mã do Admin cấp)</div>
+          </div>
+
+          <div class="d-grid mt-4">
+            <button type="submit" id="btnGatewayLoginSubmit" class="btn btn-primary py-2 fw-bold shadow-sm">
+              <span id="btnLoginText"><i class="bi bi-box-arrow-in-right me-2"></i>ĐĂNG NHẬP HỆ THỐNG</span>
+              <span id="btnLoginSpinner" class="spinner-border spinner-border-sm d-none"></span>
+            </button>
+          </div>
+        </form>
+
+        <!-- CHÍNH SÁCH BẢO MẬT & AN TOÀN -->
+        <div class="border-top mt-4 pt-3 text-center">
+          <div class="badge bg-light text-secondary border mb-1">
+            <i class="bi bi-shield-fill-check text-primary me-1"></i>CHÍNH SÁCH AN NINH HỆ THỐNG
+          </div>
+          <div class="text-muted" style="font-size: 0.78rem;">
+            Nhập sai mật khẩu <strong>5 lần</strong>: Khóa <strong>15 phút</strong>.<br>
+            Nhập sai <strong>10 lần</strong>: <strong>Khóa tài khoản</strong> vĩnh viễn.<br>
+            <span class="text-secondary">Chưa được cấp tài khoản? Liên hệ Quản trị viên để được cấp quyền.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== KHÔNG GIAN LÀM VIỆC CHÍNH (CHỈ HIỂN THỊ KHI ĐÃ ĐĂNG NHẬP) ==================== -->
+  <div id="appMainWorkspace" class="d-none">
+    <div class="main-container">
+
+      <!-- ==================== KHU VỰC QUẢN TRỊ VIÊN (ADMIN DASHBOARD) ==================== -->
+      <div id="adminViewSection" class="d-none mb-4">
       
       <!-- Thanh điều hướng Tab Admin -->
       <div class="custom-card mb-3">
@@ -573,12 +764,12 @@
                 <thead>
                   <tr>
                     <th style="width: 45px;" class="text-center">STT</th>
-                    <th style="width: 100px;">Mã CB</th>
+                    <th style="width: 90px;">Mã CB</th>
                     <th>Họ và Tên</th>
                     <th>Số điện thoại</th>
-                    <th style="width: 120px;">Mã PIN</th>
-                    <th class="text-center" style="width: 120px;">Trạng thái</th>
-                    <th class="text-center" style="width: 140px;">Thao tác</th>
+                    <th style="width: 100px;">Mã PIN</th>
+                    <th class="text-center" style="min-width: 160px;">Trạng thái & An ninh</th>
+                    <th class="text-center" style="width: 170px;">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody id="officerManagementTableBody">
@@ -813,7 +1004,7 @@
         </table>
       </div>
     </div>
-
+  </div>
   </div>
 
   <!-- ==================== MODAL CAMERA TRỰC TIẾP VỚI HUD TỰ ĐỘNG GÁN ==================== -->
@@ -918,24 +1109,59 @@
     </div>
   </div>
 
-  <!-- ==================== MODAL ĐĂNG NHẬP ADMIN ==================== -->
-  <div class="modal fade" id="adminLoginModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered modal-sm">
+  <!-- ==================== MODAL ĐỔI MẬT KHẨU ADMIN ==================== -->
+  <div class="modal fade" id="adminChangePasswordModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
       <div class="modal-content border-0 shadow">
         <div class="modal-header bg-dark text-white py-2">
-          <h6 class="modal-title"><i class="bi bi-shield-lock me-2 text-warning"></i>Xác thực Quản trị viên</h6>
-          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          <h6 class="modal-title" id="adminChangePassModalTitle">
+            <i class="bi bi-key-fill text-warning me-2"></i>Đổi Mật Khẩu Quản Trị Viên
+          </h6>
+          <button type="button" id="btnCloseChangePassModalX" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
         </div>
-        <form onsubmit="handleAdminLogin(event)">
-          <div class="modal-body p-4 text-center">
-            <i class="bi bi-person-lock text-primary fs-1 mb-2 d-block"></i>
-            <p class="small text-muted mb-3">Nhập mã PIN để truy cập Dashboard và quản trị hệ thống</p>
-            <input type="password" id="adminPinInput" class="form-control text-center fs-4 fw-bold letter-spacing-lg mb-2" placeholder="••••••" maxlength="10" required autofocus>
-            <div class="small text-muted">Mã PIN mặc định: <strong>123456</strong></div>
+        <form onsubmit="handleAdminChangePasswordSubmit(event)">
+          <div class="modal-body p-4">
+            <div id="firstLoginAlertNotice" class="alert alert-warning border-0 small mb-3 d-none">
+              <i class="bi bi-exclamation-triangle-fill fs-5 text-danger me-2 align-middle"></i>
+              <strong>YÊU CẦU BẢO MẬT:</strong> Đây là lần đăng nhập đầu tiên (hoặc bạn đang dùng mật khẩu mặc định 123456). Vui lòng đổi mật khẩu mới để bảo vệ an toàn cho hệ thống!
+            </div>
+
+            <div class="mb-3">
+              <label for="adminCurrentPassword" class="form-label small fw-semibold">Mật khẩu hiện tại (*):</label>
+              <div class="input-group">
+                <input type="password" id="adminCurrentPassword" class="form-control" placeholder="Nhập mật khẩu hiện tại" required>
+                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('adminCurrentPassword')">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label for="adminNewPassword" class="form-label small fw-semibold">Mật khẩu mới (* tối thiểu 6 ký tự):</label>
+              <div class="input-group">
+                <input type="password" id="adminNewPassword" class="form-control" placeholder="Nhập mật khẩu mới" minlength="6" required>
+                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('adminNewPassword')">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+              <div class="form-text small">Nên đặt mật khẩu mạnh kết hợp chữ và số.</div>
+            </div>
+
+            <div class="mb-2">
+              <label for="adminConfirmPassword" class="form-label small fw-semibold">Xác nhận mật khẩu mới (*):</label>
+              <div class="input-group">
+                <input type="password" id="adminConfirmPassword" class="form-control" placeholder="Nhập lại mật khẩu mới" minlength="6" required>
+                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('adminConfirmPassword')">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+            </div>
           </div>
-          <div class="modal-footer py-2 bg-light">
-            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button>
-            <button type="submit" class="btn btn-sm btn-primary px-3">Xác nhận</button>
+          <div class="modal-footer py-2 bg-light d-flex justify-content-between">
+            <button type="button" id="btnCancelChangePass" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button>
+            <button type="submit" class="btn btn-sm btn-primary px-3 fw-bold">
+              <i class="bi bi-check2-circle me-1"></i>Lưu Mật Khẩu Mới
+            </button>
           </div>
         </form>
       </div>

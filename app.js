@@ -24,13 +24,18 @@ let currentFacingMode = "environment";
 let filterOnlyMyReports = false;
 let cameraClockInterval = null;
 
+// Biến toàn cục xác thực & an ninh
+let currentLoggedInUser = null;
+let currentLoginRole = "officer"; // "officer" hoặc "admin"
+let lockoutCountdownInterval = null;
+
 // Khởi chạy khi DOM sẵn sàng
 document.addEventListener("DOMContentLoaded", () => {
   initSystem();
   loadOfficersData();
   initDateTimeFields();
   setupEventListeners();
-  checkAdminSession();
+  checkUserAuthenticationSession();
   initRealtimeWebSocket();
   // Tự động xin quyền và lấy GPS sẵn ngay khi mở trang web
   fetchGpsAutomatically(false);
@@ -282,8 +287,12 @@ function populateOfficerDropdown() {
         officerSelect.appendChild(opt);
       });
 
-    // Nếu chưa chọn ai, tự động chọn người đầu tiên
-    if (!officerSelect.value && officerSelect.options.length > 1) {
+    // Nếu người dùng là cán bộ đã đăng nhập, cố định tên cán bộ
+    if (currentLoggedInUser && currentLoggedInUser.role === "officer") {
+      const targetVal = `${currentLoggedInUser.code} - ${currentLoggedInUser.name}`;
+      officerSelect.value = targetVal;
+      officerSelect.disabled = true;
+    } else if (!officerSelect.value && officerSelect.options.length > 1) {
       officerSelect.selectedIndex = 1;
       localStorage.setItem("last_selected_officer", officerSelect.value);
     }
@@ -311,6 +320,31 @@ function populateOfficerDropdown() {
       adminFilterOfficer.appendChild(opt);
     });
   }
+
+  populateLoginOfficerDropdown();
+}
+
+function populateLoginOfficerDropdown() {
+  const loginSelect = document.getElementById("loginOfficerSelect");
+  if (!loginSelect) return;
+  const currentVal = loginSelect.value;
+  loginSelect.innerHTML = '<option value="">-- Chọn Cán bộ được cấp tài khoản --</option>';
+
+  currentOfficers.forEach(o => {
+    const sec = getSecurityState(o.code);
+    const now = Date.now();
+    let lockNote = "";
+    if (sec.isPermanentLocked || sec.failedCount >= 10 || o.status === "locked") {
+      lockNote = " ⛔ [Đã khóa 10 lần]";
+    } else if (sec.lockUntil && sec.lockUntil > now) {
+      lockNote = " ⏳ [Tạm khóa 15p]";
+    }
+    const opt = document.createElement("option");
+    opt.value = o.code;
+    opt.textContent = `${o.code} - ${o.name} (${o.phone || 'Chưa SĐT'})${lockNote}`;
+    if (o.code === currentVal) opt.selected = true;
+    loginSelect.appendChild(opt);
+  });
 }
 
 /**
@@ -362,8 +396,13 @@ function fetchGpsAutomatically(showNotification = true) {
 }
 
 function updateCameraHudInfo() {
-  const officerSelect = document.getElementById("officerName");
-  const officerName = officerSelect?.value || localStorage.getItem("last_selected_officer") || "Cán bộ công việc";
+  let officerName = "Cán bộ công việc";
+  if (currentLoggedInUser && currentLoggedInUser.role === "officer") {
+    officerName = `${currentLoggedInUser.code} - ${currentLoggedInUser.name}`;
+  } else {
+    const officerSelect = document.getElementById("officerName");
+    officerName = officerSelect?.value || localStorage.getItem("last_selected_officer") || "Cán bộ công việc";
+  }
   const hudOfficer = document.getElementById("hudOfficerName");
   if (hudOfficer) hudOfficer.textContent = officerName;
 
@@ -466,8 +505,13 @@ function applyWatermarkToCanvas(canvas) {
   const now = new Date();
   const timeString = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth()+1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
   
-  const officerSelect = document.getElementById("officerName");
-  const officerText = officerSelect?.value || localStorage.getItem("last_selected_officer") || "Cán bộ công việc";
+  let officerText = "Cán bộ công việc";
+  if (currentLoggedInUser && currentLoggedInUser.role === "officer") {
+    officerText = `${currentLoggedInUser.code} - ${currentLoggedInUser.name}`;
+  } else {
+    const officerSelect = document.getElementById("officerName");
+    officerText = officerSelect?.value || localStorage.getItem("last_selected_officer") || "Cán bộ công việc";
+  }
   
   let gpsText = "Tọa độ: Đang bật định vị thiết bị";
   if (currentGpsLocation) {
@@ -639,7 +683,10 @@ function captureGpsLocation() {
 async function handleFormSubmit(event) {
   event.preventDefault();
 
-  const officerName = document.getElementById("officerName").value;
+  let officerName = document.getElementById("officerName").value;
+  if (currentLoggedInUser && currentLoggedInUser.role === "officer") {
+    officerName = `${currentLoggedInUser.code} - ${currentLoggedInUser.name}`;
+  }
   const customerName = document.getElementById("customerName").value.trim();
   const address = document.getElementById("appraisalAddress").value.trim();
   const startDate = document.getElementById("startDate").value;
@@ -876,54 +923,651 @@ function applyPublicStaffFilter() {
 }
 
 /**
- * 6. QUẢN TRỊ VIÊN (ADMIN DASHBOARD)
+ * ==============================================================================
+ * 6. HỆ THỐNG XÁC THỰC, BẢO MẬT & ĐỔI MẬT KHẨU (CHỐNG DÒ QUÉT MẬT KHẨU)
+ * Quy tắc an ninh:
+ * - Truy cập trang web phải qua Màn hình Đăng Nhập.
+ * - Chưa được cấp tài khoản thì không được vào hệ thống.
+ * - Nhập sai mật khẩu quá 5 lần: Khóa 15 phút (đồng hồ đếm ngược).
+ * - Nhập sai 10 lần: Khóa tài khoản vĩnh viễn (Admin mở khóa).
+ * - Admin bắt buộc đổi mật khẩu sau lần đăng nhập đầu tiên.
+ * ==============================================================================
  */
-function handleAdminLogin(event) {
-  event.preventDefault();
-  const pin = document.getElementById("adminPinInput").value.trim();
 
-  if (pin === APP_CONFIG.ADMIN_PIN) {
-    sessionStorage.setItem("admin_authenticated", "true");
-    const modal = bootstrap.Modal.getInstance(document.getElementById("adminLoginModal"));
-    if (modal) modal.hide();
-    document.getElementById("adminPinInput").value = "";
-    showToast("Đăng nhập quyền Quản trị viên thành công!", "success");
-    showAdminDashboard();
+function getSecurityState(accountKey) {
+  if (!accountKey) return { failedCount: 0, lockUntil: null, isPermanentLocked: false };
+  const raw = localStorage.getItem("app_auth_security");
+  let store = {};
+  if (raw) {
+    try { store = JSON.parse(raw); } catch (e) { store = {}; }
+  }
+  const key = String(accountKey).toUpperCase();
+  if (!store[key]) {
+    store[key] = { failedCount: 0, lockUntil: null, isPermanentLocked: false };
+  }
+  return store[key];
+}
+
+function setSecurityState(accountKey, state) {
+  if (!accountKey) return;
+  const raw = localStorage.getItem("app_auth_security");
+  let store = {};
+  if (raw) {
+    try { store = JSON.parse(raw); } catch (e) { store = {}; }
+  }
+  const key = String(accountKey).toUpperCase();
+  store[key] = state;
+  localStorage.setItem("app_auth_security", JSON.stringify(store));
+}
+
+function checkAccountLockStatus(accountKey) {
+  const state = getSecurityState(accountKey);
+  const now = Date.now();
+
+  // 1. Kiểm tra khóa vĩnh viễn (sai 10 lần)
+  if (state.isPermanentLocked || (state.failedCount && state.failedCount >= 10)) {
+    return {
+      isLocked: true,
+      type: "permanent",
+      failedCount: state.failedCount || 10,
+      message: "Tài khoản đã bị KHÓA VĨNH VIỄN do nhập sai mật khẩu 10 lần liên tiếp! Vui lòng liên hệ Quản trị viên để mở khóa."
+    };
+  }
+
+  // 2. Kiểm tra khóa tạm thời 15 phút (sai >= 5 lần)
+  if (state.lockUntil && state.lockUntil > now) {
+    const remainingSeconds = Math.ceil((state.lockUntil - now) / 1000);
+    return {
+      isLocked: true,
+      type: "temporary",
+      remainingSeconds: remainingSeconds,
+      failedCount: state.failedCount || 5,
+      message: `Tài khoản tạm thời bị khóa do sai quá 5 lần. Vui lòng thử lại sau: ${formatCountdown(remainingSeconds)}.`
+    };
+  }
+
+  // Nếu đã hết thời gian 15 phút nhưng failedCount chưa đạt 10
+  if (state.lockUntil && state.lockUntil <= now) {
+    state.lockUntil = null;
+    setSecurityState(accountKey, state);
+  }
+
+  return {
+    isLocked: false,
+    failedCount: state.failedCount || 0
+  };
+}
+
+function registerFailedPasswordAttempt(accountKey) {
+  const state = getSecurityState(accountKey);
+  state.failedCount = (state.failedCount || 0) + 1;
+
+  if (state.failedCount >= 10) {
+    state.isPermanentLocked = true;
+    state.lockUntil = null;
+    lockOfficerInList(accountKey);
+  } else if (state.failedCount >= 5) {
+    // Khóa đúng 15 phút (15 * 60 * 1000 ms)
+    state.lockUntil = Date.now() + 15 * 60 * 1000;
+  }
+
+  setSecurityState(accountKey, state);
+  return state;
+}
+
+function registerSuccessfulLogin(accountKey) {
+  const state = getSecurityState(accountKey);
+  state.failedCount = 0;
+  state.lockUntil = null;
+  state.isPermanentLocked = false;
+  setSecurityState(accountKey, state);
+}
+
+function adminResetAccountSecurity(accountKey) {
+  setSecurityState(accountKey, {
+    failedCount: 0,
+    lockUntil: null,
+    isPermanentLocked: false
+  });
+}
+
+function lockOfficerInList(accountKey) {
+  const key = String(accountKey).toUpperCase();
+  const updated = currentOfficers.map(o => {
+    if (o.code.toUpperCase() === key || (o.phone && o.phone === key)) {
+      return { ...o, status: "locked" };
+    }
+    return o;
+  });
+  saveLocalOfficers(updated);
+}
+
+function formatCountdown(totalSeconds) {
+  const mins = Math.floor(totalSeconds / 60);
+  const secs = totalSeconds % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
+function startLockoutCountdown(accountKey, remainingSeconds) {
+  if (lockoutCountdownInterval) clearInterval(lockoutCountdownInterval);
+  let sec = remainingSeconds;
+
+  const alertBox = document.getElementById("loginSecurityAlert");
+  const submitBtn = document.getElementById("btnGatewayLoginSubmit");
+  const passInput = document.getElementById("loginPasswordInput");
+
+  if (submitBtn) submitBtn.disabled = true;
+  if (passInput) passInput.disabled = true;
+
+  function updateUi() {
+    if (sec <= 0) {
+      clearInterval(lockoutCountdownInterval);
+      lockoutCountdownInterval = null;
+      if (submitBtn) submitBtn.disabled = false;
+      if (passInput) passInput.disabled = false;
+      if (alertBox) {
+        alertBox.className = "alert alert-success small mb-3";
+        alertBox.innerHTML = '<i class="bi bi-unlock-fill me-1"></i>Đã hết 15 phút tạm khóa. Bạn có thể thử đăng nhập lại!';
+      }
+      return;
+    }
+
+    if (alertBox) {
+      alertBox.classList.remove("d-none");
+      alertBox.className = "lockout-timer-box text-center";
+      alertBox.innerHTML = `
+        <div class="fw-bold mb-1"><i class="bi bi-clock-history me-1"></i>TÀI KHOẢN TẠM THỜI BỊ KHÓA 15 PHÚT</div>
+        <div class="small mb-1">Do bạn đã nhập sai mật khẩu quá 5 lần.</div>
+        <div class="display-6 fw-bold text-danger letter-spacing-lg mb-1">${formatCountdown(sec)}</div>
+        <div class="small text-muted">Vui lòng đợi hết thời gian đếm ngược để thử lại.</div>
+      `;
+    }
+    sec--;
+  }
+
+  updateUi();
+  lockoutCountdownInterval = setInterval(updateUi, 1000);
+}
+
+function showPermanentLockAlert(message) {
+  if (lockoutCountdownInterval) clearInterval(lockoutCountdownInterval);
+  const alertBox = document.getElementById("loginSecurityAlert");
+  const submitBtn = document.getElementById("btnGatewayLoginSubmit");
+  const passInput = document.getElementById("loginPasswordInput");
+
+  if (submitBtn) submitBtn.disabled = true;
+  if (passInput) passInput.disabled = true;
+
+  if (alertBox) {
+    alertBox.classList.remove("d-none");
+    alertBox.className = "alert alert-danger shadow-sm mb-3";
+    alertBox.innerHTML = `
+      <div class="d-flex align-items-center gap-2 mb-1">
+        <i class="bi bi-x-octagon-fill fs-3 text-danger"></i>
+        <div>
+          <strong class="text-danger">TÀI KHOẢN ĐÃ BỊ KHÓA VĨNH VIỄN</strong>
+          <div class="small">Đã nhập sai mật khẩu 10 lần liên tiếp vì lý do an toàn!</div>
+        </div>
+      </div>
+      <div class="small border-top border-danger border-opacity-25 pt-2 mt-2">
+        <i class="bi bi-info-circle me-1"></i>${message || "Vui lòng liên hệ Quản trị viên để được mở khóa tài khoản."}
+      </div>
+    `;
+  }
+}
+
+function switchLoginRole(role) {
+  currentLoginRole = role;
+  if (lockoutCountdownInterval) {
+    clearInterval(lockoutCountdownInterval);
+    lockoutCountdownInterval = null;
+  }
+
+  const tabOfficer = document.getElementById("tabBtnOfficer");
+  const tabAdmin = document.getElementById("tabBtnAdmin");
+  const officerFields = document.getElementById("officerLoginFields");
+  const adminFields = document.getElementById("adminLoginFields");
+  const pinHint = document.getElementById("loginPinHintText");
+  const passInput = document.getElementById("loginPasswordInput");
+  const submitBtn = document.getElementById("btnGatewayLoginSubmit");
+
+  if (passInput) {
+    passInput.value = "";
+    passInput.disabled = false;
+  }
+  if (submitBtn) submitBtn.disabled = false;
+
+  if (role === "admin") {
+    tabOfficer.classList.remove("active");
+    tabAdmin.classList.add("active");
+    officerFields.classList.add("d-none");
+    adminFields.classList.remove("d-none");
+    if (pinHint) pinHint.textContent = "Mật khẩu Quản trị mặc định: 123456 (hoặc mật khẩu mới do Admin đặt)";
+    updateAccountSecurityDisplayFor("ADMIN");
   } else {
-    showToast("Mã PIN không chính xác! (Mặc định: 123456)", "danger");
+    tabOfficer.classList.add("active");
+    tabAdmin.classList.remove("active");
+    officerFields.classList.remove("d-none");
+    adminFields.classList.add("d-none");
+    if (pinHint) pinHint.textContent = "Mã PIN cán bộ mặc định: 123456 (hoặc mã riêng do Admin cấp)";
+    onLoginOfficerSelectChange();
   }
 }
 
-function checkAdminSession() {
-  if (sessionStorage.getItem("admin_authenticated") === "true") {
-    showAdminDashboard();
+function onLoginOfficerSelectChange() {
+  const select = document.getElementById("loginOfficerSelect");
+  const customInput = document.getElementById("loginCustomOfficerInput");
+  const code = (customInput && !customInput.classList.contains("d-none") && customInput.value.trim()) 
+    ? customInput.value.trim().toUpperCase() 
+    : select.value;
+  updateAccountSecurityDisplayFor(code);
+}
+
+function toggleCustomOfficerInput() {
+  const customInput = document.getElementById("loginCustomOfficerInput");
+  const select = document.getElementById("loginOfficerSelect");
+  if (!customInput) return;
+
+  if (customInput.classList.contains("d-none")) {
+    customInput.classList.remove("d-none");
+    select.disabled = true;
+    customInput.focus();
+  } else {
+    customInput.classList.add("d-none");
+    customInput.value = "";
+    select.disabled = false;
+    onLoginOfficerSelectChange();
   }
 }
 
-function showAdminDashboard() {
-  const adminSection = document.getElementById("adminViewSection");
-  const adminBadge = document.getElementById("adminBadgeIndicator");
-  const btnLogin = document.getElementById("btnOpenAdminLogin");
+function onCustomOfficerInputChange() {
+  const customInput = document.getElementById("loginCustomOfficerInput");
+  const val = customInput.value.trim().toUpperCase();
+  updateAccountSecurityDisplayFor(val);
+}
 
-  if (adminSection) adminSection.classList.remove("d-none");
-  if (adminBadge) adminBadge.classList.remove("d-none");
-  if (btnLogin) btnLogin.classList.add("d-none");
+function updateAccountSecurityDisplayFor(accountKey) {
+  const alertBox = document.getElementById("loginSecurityAlert");
+  const badge = document.getElementById("loginAttemptsBadge");
+  const submitBtn = document.getElementById("btnGatewayLoginSubmit");
+  const passInput = document.getElementById("loginPasswordInput");
+
+  if (!accountKey) {
+    if (alertBox) alertBox.classList.add("d-none");
+    if (badge) badge.textContent = "";
+    if (submitBtn) submitBtn.disabled = false;
+    if (passInput) passInput.disabled = false;
+    return;
+  }
+
+  const lockInfo = checkAccountLockStatus(accountKey);
+
+  if (lockInfo.isLocked) {
+    if (lockInfo.type === "permanent") {
+      showPermanentLockAlert(lockInfo.message);
+    } else if (lockInfo.type === "temporary") {
+      startLockoutCountdown(accountKey, lockInfo.remainingSeconds);
+    }
+  } else {
+    if (lockoutCountdownInterval) {
+      clearInterval(lockoutCountdownInterval);
+      lockoutCountdownInterval = null;
+    }
+    if (submitBtn) submitBtn.disabled = false;
+    if (passInput) passInput.disabled = false;
+
+    if (lockInfo.failedCount > 0) {
+      if (alertBox) {
+        alertBox.classList.remove("d-none");
+        alertBox.className = "alert alert-warning small mb-3";
+        alertBox.innerHTML = `<i class="bi bi-exclamation-triangle-fill text-danger me-1"></i>Lưu ý: Tài khoản này đã nhập sai mật khẩu <strong>${lockInfo.failedCount}/5 lần</strong>. Sai 5 lần sẽ bị khóa 15 phút, sai 10 lần sẽ bị khóa tài khoản vĩnh viễn!`;
+      }
+      if (badge) badge.innerHTML = `<span class="badge bg-warning text-dark">Sai ${lockInfo.failedCount}/5</span>`;
+    } else {
+      if (alertBox) alertBox.classList.add("d-none");
+      if (badge) badge.textContent = "";
+    }
+  }
+}
+
+function togglePasswordVisibility(inputId) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const isPass = input.type === "password";
+  input.type = isPass ? "text" : "password";
+  const btn = input.nextElementSibling;
+  if (btn && btn.querySelector("i")) {
+    btn.querySelector("i").className = isPass ? "bi bi-eye-slash" : "bi bi-eye";
+  }
+}
+
+async function handleGatewayLogin(event) {
+  event.preventDefault();
+  const password = document.getElementById("loginPasswordInput").value.trim();
+  const alertBox = document.getElementById("loginSecurityAlert");
+
+  if (currentLoginRole === "officer") {
+    // 1. Xác định tài khoản cán bộ
+    const customInput = document.getElementById("loginCustomOfficerInput");
+    const select = document.getElementById("loginOfficerSelect");
+    let officerKey = "";
+
+    if (customInput && !customInput.classList.contains("d-none") && customInput.value.trim()) {
+      officerKey = customInput.value.trim();
+    } else {
+      officerKey = select.value;
+    }
+
+    if (!officerKey) {
+      showToast("Vui lòng chọn hoặc nhập tài khoản Cán bộ!", "warning");
+      return;
+    }
+
+    // Tìm cán bộ trong danh sách
+    const officer = currentOfficers.find(o => 
+      o.code.toUpperCase() === officerKey.toUpperCase() || 
+      (o.phone && o.phone === officerKey) ||
+      (o.name && o.name.toLowerCase() === officerKey.toLowerCase())
+    );
+
+    if (!officer) {
+      showToast("TÀI KHOẢN CHƯA ĐƯỢC CẤP QUYỀN: Tài khoản này không tồn tại trong hệ thống. Vui lòng liên hệ Quản trị viên để được cấp tài khoản!", "danger");
+      if (alertBox) {
+        alertBox.classList.remove("d-none");
+        alertBox.className = "alert alert-danger small mb-3";
+        alertBox.innerHTML = '<i class="bi bi-person-x-fill me-1"></i>Tài khoản không tồn tại. Nếu bạn chưa được cấp tài khoản, bạn không thể truy cập hệ thống!';
+      }
+      return;
+    }
+
+    // Kiểm tra khóa bảo mật
+    const lockInfo = checkAccountLockStatus(officer.code);
+    if (lockInfo.isLocked) {
+      if (lockInfo.type === "permanent") {
+        showPermanentLockAlert(lockInfo.message);
+      } else {
+        startLockoutCountdown(officer.code, lockInfo.remainingSeconds);
+      }
+      return;
+    }
+
+    // So sánh mật khẩu (PIN)
+    const expectedPin = officer.pin || "123456";
+    if (password !== expectedPin) {
+      const state = registerFailedPasswordAttempt(officer.code);
+      const newLock = checkAccountLockStatus(officer.code);
+
+      if (newLock.isLocked) {
+        if (newLock.type === "permanent") {
+          showPermanentLockAlert("Bạn đã nhập sai mật khẩu 10 lần. Tài khoản đã bị KHÓA VĨNH VIỄN! Hãy liên hệ Quản trị viên để mở khóa.");
+          showToast("Tài khoản đã bị KHÓA VĨNH VIỄN do sai 10 lần!", "danger");
+        } else {
+          startLockoutCountdown(officer.code, newLock.remainingSeconds);
+          showToast("Bạn đã nhập sai mật khẩu 5 lần! Tài khoản bị khóa 15 phút.", "danger");
+        }
+      } else {
+        showToast(`Mật khẩu không chính xác! Đã nhập sai ${state.failedCount}/5 lần (Sai 5 lần sẽ khóa 15 phút, sai 10 lần sẽ khóa tài khoản).`, "danger");
+        updateAccountSecurityDisplayFor(officer.code);
+      }
+      return;
+    }
+
+    // ĐĂNG NHẬP CÁN BỘ THÀNH CÔNG
+    registerSuccessfulLogin(officer.code);
+    currentLoggedInUser = {
+      role: "officer",
+      id: officer.id,
+      code: officer.code,
+      name: officer.name,
+      phone: officer.phone || ""
+    };
+    sessionStorage.setItem("app_authenticated_user", JSON.stringify(currentLoggedInUser));
+    applyUserLoggedInState();
+    showToast(`Đăng nhập thành công! Chào mừng cán bộ ${officer.name}.`, "success");
+
+  } else {
+    // VAI TRÒ QUẢN TRỊ VIÊN (ADMIN)
+    const adminKey = "ADMIN";
+    const lockInfo = checkAccountLockStatus(adminKey);
+
+    if (lockInfo.isLocked) {
+      if (lockInfo.type === "permanent") {
+        showPermanentLockAlert(lockInfo.message);
+      } else {
+        startLockoutCountdown(adminKey, lockInfo.remainingSeconds);
+      }
+      return;
+    }
+
+    const currentAdminPass = localStorage.getItem("app_admin_password") || APP_CONFIG.ADMIN_PIN || "123456";
+
+    if (password !== currentAdminPass) {
+      const state = registerFailedPasswordAttempt(adminKey);
+      const newLock = checkAccountLockStatus(adminKey);
+
+      if (newLock.isLocked) {
+        if (newLock.type === "permanent") {
+          showPermanentLockAlert("Bạn đã nhập sai mật khẩu Quản trị 10 lần. Tài khoản Admin đã bị KHÓA VĨNH VIỄN!");
+          showToast("Tài khoản Quản trị đã bị KHÓA do nhập sai 10 lần!", "danger");
+        } else {
+          startLockoutCountdown(adminKey, newLock.remainingSeconds);
+          showToast("Nhập sai 5 lần! Tài khoản Admin tạm khóa 15 phút.", "danger");
+        }
+      } else {
+        showToast(`Mật khẩu Quản trị không chính xác! Đã sai ${state.failedCount}/5 lần.`, "danger");
+        updateAccountSecurityDisplayFor(adminKey);
+      }
+      return;
+    }
+
+    // ĐĂNG NHẬP ADMIN THÀNH CÔNG
+    registerSuccessfulLogin(adminKey);
+    currentLoggedInUser = {
+      role: "admin",
+      name: "Quản Trị Viên"
+    };
+    sessionStorage.setItem("app_authenticated_user", JSON.stringify(currentLoggedInUser));
+    sessionStorage.setItem("admin_authenticated", "true");
+    applyUserLoggedInState();
+    showToast("Đăng nhập quyền Quản trị viên thành công!", "success");
+
+    // KIỂM TRA LẦN ĐĂNG NHẬP ĐẦU TIÊN (HOẶC VẪN DÙNG PASS MẶC ĐỊNH 123456)
+    const hasChanged = localStorage.getItem("app_admin_password_changed") === "true";
+    if (!hasChanged || currentAdminPass === "123456") {
+      setTimeout(() => {
+        openAdminChangePasswordModal(true); // isForced = true
+      }, 500);
+    }
+  }
+}
+
+function checkUserAuthenticationSession() {
+  const savedUser = sessionStorage.getItem("app_authenticated_user");
+  if (savedUser) {
+    try {
+      currentLoggedInUser = JSON.parse(savedUser);
+      applyUserLoggedInState();
+      return;
+    } catch (e) {
+      currentLoggedInUser = null;
+    }
+  }
+  showLoginGateway();
+}
+
+function showLoginGateway() {
+  document.getElementById("loginGatewaySection").classList.remove("d-none");
+  document.getElementById("appMainWorkspace").classList.add("d-none");
+  document.getElementById("userNavProfile").classList.add("d-none");
+  populateLoginOfficerDropdown();
+  switchLoginRole(currentLoginRole || "officer");
+}
+
+function applyUserLoggedInState() {
+  if (!currentLoggedInUser) {
+    showLoginGateway();
+    return;
+  }
+
+  document.getElementById("loginGatewaySection").classList.add("d-none");
+  document.getElementById("appMainWorkspace").classList.remove("d-none");
+  document.getElementById("userNavProfile").classList.remove("d-none");
+
+  const navRoleBadge = document.getElementById("navRoleBadge");
+  const btnNavChangePass = document.getElementById("btnNavChangeAdminPass");
+  const adminViewSection = document.getElementById("adminViewSection");
+  const officerSelect = document.getElementById("officerName");
+
+  if (currentLoggedInUser.role === "officer") {
+    // Cán bộ thực hiện
+    if (navRoleBadge) {
+      navRoleBadge.innerHTML = `
+        <span class="badge bg-primary text-white py-2 px-2 shadow-sm">
+          <i class="bi bi-person-badge-fill me-1"></i>${escapeHtml(currentLoggedInUser.name)} (${escapeHtml(currentLoggedInUser.code)})
+        </span>
+      `;
+    }
+    if (btnNavChangePass) btnNavChangePass.classList.add("d-none");
+    if (adminViewSection) adminViewSection.classList.add("d-none");
+
+    // Khóa trường Cán bộ thực hiện trong form để không thể chọn người khác
+    if (officerSelect) {
+      const targetVal = `${currentLoggedInUser.code} - ${currentLoggedInUser.name}`;
+      let optionExists = false;
+      for (let i = 0; i < officerSelect.options.length; i++) {
+        if (officerSelect.options[i].value === targetVal || officerSelect.options[i].value.startsWith(currentLoggedInUser.code)) {
+          officerSelect.selectedIndex = i;
+          optionExists = true;
+          break;
+        }
+      }
+      if (!optionExists) {
+        const newOpt = document.createElement("option");
+        newOpt.value = targetVal;
+        newOpt.textContent = targetVal;
+        newOpt.selected = true;
+        officerSelect.appendChild(newOpt);
+      }
+      officerSelect.disabled = true;
+    }
+
+    const officerHint = document.getElementById("officerNameHint");
+    if (officerHint) {
+      officerHint.innerHTML = `<span class="badge bg-success bg-opacity-10 text-success"><i class="bi bi-shield-check me-1"></i>Tài khoản ${escapeHtml(currentLoggedInUser.name)} đã xác thực đăng nhập</span>`;
+    }
+
+  } else {
+    // Quản trị viên (Admin)
+    if (navRoleBadge) {
+      navRoleBadge.innerHTML = `
+        <span class="badge bg-danger text-white py-2 px-2 shadow-sm">
+          <i class="bi bi-shield-lock-fill me-1"></i>ADMIN ACTIVE
+        </span>
+      `;
+    }
+    if (btnNavChangePass) btnNavChangePass.classList.remove("d-none");
+    if (adminViewSection) adminViewSection.classList.remove("d-none");
+
+    // Admin có thể chọn bất kỳ cán bộ nào để hỗ trợ nộp báo cáo
+    if (officerSelect) {
+      officerSelect.disabled = false;
+    }
+    const officerHint = document.getElementById("officerNameHint");
+    if (officerHint) {
+      officerHint.textContent = "Quản trị viên có thể chọn nộp báo cáo thay cho cán bộ bất kỳ.";
+    }
+  }
 
   renderAllTables();
-  renderOfficersTable();
+  if (currentLoggedInUser.role === "admin") {
+    renderOfficersTable();
+  }
 }
 
-function logoutAdmin() {
+function handleUserLogout() {
+  if (lockoutCountdownInterval) {
+    clearInterval(lockoutCountdownInterval);
+    lockoutCountdownInterval = null;
+  }
+  stopLiveCamera();
+
+  sessionStorage.removeItem("app_authenticated_user");
   sessionStorage.removeItem("admin_authenticated");
-  const adminSection = document.getElementById("adminViewSection");
-  const adminBadge = document.getElementById("adminBadgeIndicator");
-  const btnLogin = document.getElementById("btnOpenAdminLogin");
+  currentLoggedInUser = null;
 
-  if (adminSection) adminSection.classList.add("d-none");
-  if (adminBadge) adminBadge.classList.add("d-none");
-  if (btnLogin) btnLogin.classList.remove("d-none");
+  showLoginGateway();
+  showToast("Đã đăng xuất khỏi hệ thống thành công.", "info");
+}
 
-  showToast("Đã đăng xuất quyền Quản trị viên.", "info");
+function openAdminChangePasswordModal(isForced = false) {
+  const modalEl = document.getElementById("adminChangePasswordModal");
+  if (!modalEl) return;
+
+  const titleEl = document.getElementById("adminChangePassModalTitle");
+  const alertEl = document.getElementById("firstLoginAlertNotice");
+  const btnCloseX = document.getElementById("btnCloseChangePassModalX");
+  const btnCancel = document.getElementById("btnCancelChangePass");
+
+  document.getElementById("adminCurrentPassword").value = "";
+  document.getElementById("adminNewPassword").value = "";
+  document.getElementById("adminConfirmPassword").value = "";
+
+  if (isForced) {
+    titleEl.innerHTML = '<i class="bi bi-shield-exclamation text-warning me-2"></i>BẮT BUỘC: Đổi Mật Khẩu Quản Trị Viên Lần Đầu';
+    alertEl.classList.remove("d-none");
+    btnCloseX.classList.add("d-none");
+    btnCancel.classList.add("d-none");
+  } else {
+    titleEl.innerHTML = '<i class="bi bi-key-fill text-warning me-2"></i>Đổi Mật Khẩu Quản Trị Viên';
+    alertEl.classList.add("d-none");
+    btnCloseX.classList.remove("d-none");
+    btnCancel.classList.remove("d-none");
+  }
+
+  const modal = new bootstrap.Modal(modalEl);
+  modal.show();
+}
+
+function handleAdminChangePasswordSubmit(event) {
+  event.preventDefault();
+  const currentPass = document.getElementById("adminCurrentPassword").value.trim();
+  const newPass = document.getElementById("adminNewPassword").value.trim();
+  const confirmPass = document.getElementById("adminConfirmPassword").value.trim();
+
+  const realPass = localStorage.getItem("app_admin_password") || APP_CONFIG.ADMIN_PIN || "123456";
+
+  if (currentPass !== realPass) {
+    showToast("Mật khẩu hiện tại không chính xác!", "danger");
+    return;
+  }
+
+  if (newPass.length < 6) {
+    showToast("Mật khẩu mới phải có tối thiểu 6 ký tự!", "warning");
+    return;
+  }
+
+  if (newPass === currentPass) {
+    showToast("Mật khẩu mới phải khác mật khẩu hiện tại!", "warning");
+    return;
+  }
+
+  if (newPass !== confirmPass) {
+    showToast("Xác nhận mật khẩu mới không trùng khớp!", "danger");
+    return;
+  }
+
+  localStorage.setItem("app_admin_password", newPass);
+  localStorage.setItem("app_admin_password_changed", "true");
+
+  const modalEl = document.getElementById("adminChangePasswordModal");
+  const modal = bootstrap.Modal.getInstance(modalEl);
+  if (modal) modal.hide();
+
+  document.getElementById("adminCurrentPassword").value = "";
+  document.getElementById("adminNewPassword").value = "";
+  document.getElementById("adminConfirmPassword").value = "";
+
+  showToast("Đã đổi mật khẩu Quản trị viên thành công! Mật khẩu mới có hiệu lực ngay lập tức.", "success");
 }
 
 function updateAdminStatistics(reports) {
@@ -1143,10 +1787,33 @@ function renderOfficersTable() {
 
   let html = "";
   currentOfficers.forEach((o, idx) => {
-    const isLocked = o.status === "locked";
-    const statusBadge = isLocked 
-      ? '<span class="badge bg-danger">Bị khóa</span>' 
-      : '<span class="badge bg-success">Hoạt động</span>';
+    const sec = getSecurityState(o.code);
+    const now = Date.now();
+    let isTempLocked = false;
+    let tempRemainingSec = 0;
+    if (sec.lockUntil && sec.lockUntil > now) {
+      isTempLocked = true;
+      tempRemainingSec = Math.ceil((sec.lockUntil - now) / 1000);
+    }
+    const isPermLocked = sec.isPermanentLocked || (sec.failedCount && sec.failedCount >= 10) || o.status === "locked";
+
+    let statusBadge = "";
+    if (isPermLocked) {
+      statusBadge = '<span class="badge bg-danger shadow-sm"><i class="bi bi-lock-fill me-1"></i>Đã khóa (Sai 10 lần)</span>';
+    } else if (isTempLocked) {
+      statusBadge = `<span class="badge bg-warning text-dark shadow-sm"><i class="bi bi-clock-history me-1"></i>Khóa 15p (${Math.ceil(tempRemainingSec/60)}p)</span><div class="small text-danger fw-semibold">Sai: ${sec.failedCount || 5}/10 lần</div>`;
+    } else {
+      statusBadge = '<span class="badge bg-success shadow-sm"><i class="bi bi-check-circle me-1"></i>Hoạt động</span>';
+      if (sec.failedCount > 0) {
+        statusBadge += `<div class="small text-muted">Sai: ${sec.failedCount}/5 lần</div>`;
+      }
+    }
+
+    const unlockBtn = (isPermLocked || isTempLocked || (sec.failedCount && sec.failedCount > 0) || o.status === "locked")
+      ? `<button class="btn btn-outline-success" onclick="adminUnlockOfficerAccount(${o.id})" title="Mở khóa tài khoản & Đặt lại 0 lần sai">
+           <i class="bi bi-unlock-fill"></i>
+         </button>`
+      : "";
 
     html += `<tr>
       <td class="text-center text-muted fw-bold">${idx + 1}</td>
@@ -1157,11 +1824,12 @@ function renderOfficersTable() {
       <td class="text-center">${statusBadge}</td>
       <td class="text-center">
         <div class="btn-group btn-group-sm">
-          <button class="btn btn-outline-secondary" onclick="openEditOfficerModal(${o.id})" title="Chỉnh sửa">
+          ${unlockBtn}
+          <button class="btn btn-outline-secondary" onclick="openEditOfficerModal(${o.id})" title="Chỉnh sửa thông tin">
             <i class="bi bi-pencil-square"></i>
           </button>
-          <button class="btn btn-outline-warning" onclick="toggleLockOfficer(${o.id})" title="${isLocked ? 'Mở khóa' : 'Khóa'}">
-            <i class="bi bi-${isLocked ? 'unlock-fill text-success' : 'lock-fill'}"></i>
+          <button class="btn btn-outline-warning" onclick="toggleLockOfficer(${o.id})" title="${isPermLocked ? 'Mở khóa' : 'Khóa'}">
+            <i class="bi bi-${isPermLocked ? 'unlock-fill text-success' : 'lock-fill'}"></i>
           </button>
           <button class="btn btn-outline-danger" onclick="deleteOfficerAccount(${o.id})" title="Xóa tài khoản">
             <i class="bi bi-trash"></i>
@@ -1172,6 +1840,21 @@ function renderOfficersTable() {
   });
 
   tbody.innerHTML = html;
+}
+
+async function adminUnlockOfficerAccount(id) {
+  const officer = currentOfficers.find(o => o.id === id);
+  if (!officer) return;
+
+  adminResetAccountSecurity(officer.code);
+  const updated = currentOfficers.map(o => o.id === id ? { ...o, status: "active" } : o);
+  saveLocalOfficers(updated);
+
+  if (isConfigured && supabaseClient) {
+    await supabaseClient.from("officers").update({ status: "active" }).eq("id", id);
+  }
+
+  showToast(`Đã mở khóa tài khoản cán bộ ${officer.code} - ${officer.name} và đặt lại số lần nhập sai về 0!`, "success");
 }
 
 function openAddOfficerModal() {
