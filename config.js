@@ -1,20 +1,23 @@
 /**
  * ==============================================================================
- * TỆP CẤU HÌNH HỆ THỐNG GIÁM SÁT CÔNG VIỆC THẨM ĐỊNH (SERVERLESS)
+ * TỆP CẤU HÌNH HỆ THỐNG GIÁM SÁT CÔNG VIỆC THẨM ĐỊNH (SERVERLESS REALTIME 24/24)
  * ==============================================================================
  */
 
 const APP_CONFIG = {
-  // 1. Cấu hình Backend Serverless (Supabase - Miễn phí 100%)
-  // Lấy tại: https://supabase.com -> Project Settings -> API
-  SUPABASE_URL: "",       // Điền URL Supabase của bạn nếu muốn lưu đám mây vĩnh viễn
-  SUPABASE_ANON_KEY: "",  // Chuỗi anon key public từ Supabase
+  // 1. Cấu hình Kênh Realtime WebSocket 24/24 (Đồng bộ đa thiết bị tức thì)
+  // Giúp 30 cán bộ và Admin cùng lúc nhìn thấy dữ liệu của nhau chỉ sau 0.1 giây
+  REALTIME_BROKER: "wss://broker.emqx.io:8084/mqtt",
+  REALTIME_TOPIC: "gscv246/baocao/realtime_feed",
 
-  // 2. Mật mã Quản trị viên (Admin PIN) để vào trang quản lý, phân quyền, xóa dữ liệu
+  // 2. Cấu hình Backend Serverless Supabase (Tùy chọn lưu trữ đám mây vĩnh viễn)
+  SUPABASE_URL: "",       
+  SUPABASE_ANON_KEY: "",  
+
+  // 3. Mật mã Quản trị viên (Admin PIN) để vào trang quản trị
   ADMIN_PIN: "123456",
 
-  // 3. Danh sách cán bộ khởi tạo ban đầu (Nếu chưa có trong Database)
-  // Quản trị viên có thể THÊM, SỬA, KHÓA, XÓA trực tiếp trên giao diện Admin
+  // 4. Danh sách cán bộ khởi tạo ban đầu
   INITIAL_OFFICERS: [
     { code: "CB01", name: "Nguyễn Văn An", phone: "0901234501", pin: "123456", status: "active" },
     { code: "CB02", name: "Trần Đình Bảo", phone: "0901234502", pin: "123456", status: "active" },
@@ -28,7 +31,7 @@ const APP_CONFIG = {
     { code: "CB10", name: "Trịnh Công Minh", phone: "0901234510", pin: "123456", status: "active" }
   ],
 
-  // 4. Các trạng thái công việc
+  // 5. Các trạng thái công việc
   STATUS_OPTIONS: [
     { label: "Đạt yêu cầu", badgeClass: "bg-success" },
     { label: "Chờ bổ sung hồ sơ", badgeClass: "bg-warning text-dark" },

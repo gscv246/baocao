@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Hệ Thống Giám Sát Công Việc Thẩm Định Hiện Trường</title>
+  <title>Hệ Thống Giám Sát Công Việc Thẩm Định Hiện Trường (Realtime 24/24)</title>
 
   <!-- Google Font: Be Vietnam Pro -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -294,6 +294,16 @@
       transform: scale(1.15);
     }
 
+    /* Pulse animation cho bản ghi mới thêm */
+    tr.table-success {
+      animation: highlightFade 4s ease forwards;
+    }
+
+    @keyframes highlightFade {
+      0% { background-color: #bbf7d0; }
+      100% { background-color: transparent; }
+    }
+
     /* Nav Tabs */
     .nav-tabs .nav-link {
       font-weight: 600;
@@ -326,7 +336,7 @@
         <i class="bi bi-shield-check text-warning fs-3"></i>
         <div>
           <span class="navbar-brand mb-0 text-white">GIÁM SÁT THẨM ĐỊNH</span>
-          <div class="small text-white-50 d-none d-sm-block">Hệ thống báo cáo hiện trường & Giám sát nhân sự</div>
+          <div class="small text-white-50 d-none d-sm-block">Hệ thống báo cáo Realtime 24/24 đa thiết bị</div>
         </div>
       </div>
 
@@ -338,7 +348,7 @@
         <!-- Trạng thái Admin đăng nhập -->
         <div id="adminBadgeIndicator" class="d-none">
           <span class="badge bg-danger text-white py-2 px-2 shadow-sm me-1">
-            <i class="bi bi-shield-lock-fill me-1"></i>ADMIN
+            <i class="bi bi-shield-lock-fill me-1"></i>ADMIN ACTIVE
           </span>
           <button class="btn btn-outline-light btn-sm" onclick="logoutAdmin()" title="Đăng xuất Admin">
             <i class="bi bi-box-arrow-right"></i>
@@ -355,10 +365,10 @@
   <!-- ==================== NỘI DUNG CHÍNH ==================== -->
   <div class="main-container">
 
-    <!-- ==================== KHU VỰC ADMIN (QUẢN TRỊ VIÊN) ==================== -->
+    <!-- ==================== KHU VỰC QUẢN TRỊ VIÊN (ADMIN DASHBOARD) ==================== -->
     <div id="adminViewSection" class="d-none mb-4">
       
-      <!-- Thanh điều hướng Tab của Quản trị viên -->
+      <!-- Thanh điều hướng Tab Admin -->
       <div class="custom-card mb-3">
         <div class="p-3 bg-white border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2">
           <ul class="nav nav-tabs border-0" id="adminTabs" role="tablist">
@@ -369,7 +379,7 @@
             </li>
             <li class="nav-item">
               <button class="nav-link" id="tab-reports-btn" data-bs-toggle="tab" data-bs-target="#tab-reports" type="button">
-                <i class="bi bi-table me-1"></i>Danh Sách Báo Cáo Chi Tiết
+                <i class="bi bi-table me-1"></i>Báo Cáo Chi Tiết & Xóa Dữ Liệu
               </button>
             </li>
             <li class="nav-item">
@@ -381,7 +391,7 @@
 
           <div class="d-flex align-items-center gap-2">
             <button class="btn btn-success btn-sm rounded-pill px-3 shadow-sm" onclick="exportReportsToCSV()">
-              <i class="bi bi-file-earmark-excel me-1"></i>Xuất Excel
+              <i class="bi bi-file-earmark-excel me-1"></i>Xuất Excel (.CSV)
             </button>
             <div class="dropdown">
               <button class="btn btn-outline-danger btn-sm rounded-pill dropdown-toggle px-3" type="button" data-bs-toggle="dropdown">
@@ -400,9 +410,8 @@
       <!-- NỘI DUNG CÁC TAB ADMIN -->
       <div class="tab-content" id="adminTabsContent">
         
-        <!-- ==================== TAB 1: DASHBOARD HIỆU SUẤT CÁN BỘ ==================== -->
+        <!-- TAB 1: DASHBOARD HIỆU SUẤT CÁN BỘ -->
         <div class="tab-pane fade show active" id="tab-dashboard" role="tabpanel">
-          <!-- Chỉ số thống kê nhanh -->
           <div class="row g-3 mb-4">
             <div class="col-md-3 col-sm-6">
               <div class="stat-card">
@@ -442,16 +451,13 @@
             </div>
           </div>
 
-          <!-- BẢNG THEO DÕI CÔNG VIỆC CỦA TỪNG CÁN BỘ -->
+          <!-- BẢNG TỔNG HỢP HIỆU SUẤT TỪNG CÁN BỘ -->
           <div class="custom-card">
             <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
               <div>
                 <h6 class="mb-1 fw-bold text-primary"><i class="bi bi-bar-chart-line me-2"></i>Bảng Tổng Hợp Công Việc Của Mọi Cán Bộ</h6>
-                <div class="small text-muted">Thống kê số lượng hồ sơ thẩm định và tỷ lệ hoàn thành theo từng nhân sự</div>
+                <div class="small text-muted">Thống kê số lượng hồ sơ thẩm định và tiến độ thực tế của từng nhân sự</div>
               </div>
-              <button class="btn btn-outline-secondary btn-sm" onclick="loadAdminReports()" title="Làm mới">
-                <i class="bi bi-arrow-repeat"></i>
-              </button>
             </div>
             <div class="table-responsive">
               <table class="table table-hover align-middle mb-0 admin-table">
@@ -478,9 +484,8 @@
           </div>
         </div>
 
-        <!-- ==================== TAB 2: DANH SÁCH BÁO CÁO & XÓA DỮ LIỆU ==================== -->
+        <!-- TAB 2: DANH SÁCH BÁO CÁO & XÓA DỮ LIỆU -->
         <div class="tab-pane fade" id="tab-reports" role="tabpanel">
-          <!-- Bộ lọc dữ liệu -->
           <div class="custom-card mb-3 p-3 bg-white">
             <div class="row g-2 align-items-center">
               <div class="col-md-3 col-12">
@@ -507,24 +512,21 @@
               </div>
               <div class="col-md-2 col-6 d-flex gap-2">
                 <button class="btn btn-outline-secondary w-100" id="btnResetFilter" title="Đặt lại bộ lọc"><i class="bi bi-arrow-counterclockwise"></i></button>
-                <button class="btn btn-primary w-100" id="btnRefreshData" onclick="loadAdminReports()" title="Tải lại"><i class="bi bi-arrow-repeat"></i></button>
+                <button class="btn btn-primary w-100" onclick="renderAllTables()" title="Tải lại"><i class="bi bi-arrow-repeat"></i></button>
               </div>
             </div>
           </div>
 
-          <!-- Bảng danh sách báo cáo chi tiết -->
           <div class="custom-card" id="reportsListCard">
             <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
               <div class="d-flex align-items-center gap-3">
                 <h6 class="mb-0 fw-bold text-primary">
                   <i class="bi bi-table me-2"></i>Báo Cáo Chi Tiết (<span id="adminRecordCount">0</span>)
                 </h6>
-                <!-- NÚT XÓA CÁC MỤC ĐÃ CHỌN (BULK DELETE) -->
                 <button id="btnDeleteSelectedReports" class="btn btn-danger btn-sm rounded-pill px-3 shadow-sm d-none" onclick="deleteSelectedReports()">
                   <i class="bi bi-trash-fill me-1"></i>Xóa <span id="selectedDeleteCount">0</span> mục đã chọn
                 </button>
               </div>
-              <div class="small text-muted" id="lastUpdatedStatus">Chưa tải dữ liệu</div>
             </div>
 
             <div class="table-responsive">
@@ -547,9 +549,7 @@
                 </thead>
                 <tbody id="adminTableBody">
                   <tr>
-                    <td colspan="10" class="text-center py-4 text-muted">
-                      <div class="spinner-border spinner-border-sm text-primary me-2"></div> Đang tải dữ liệu...
-                    </td>
+                    <td colspan="10" class="text-center py-4 text-muted">Đang nạp dữ liệu...</td>
                   </tr>
                 </tbody>
               </table>
@@ -557,13 +557,13 @@
           </div>
         </div>
 
-        <!-- ==================== TAB 3: QUẢN LÝ TÀI KHOẢN CÁN BỘ ==================== -->
+        <!-- TAB 3: QUẢN LÝ TÀI KHOẢN CÁN BỘ -->
         <div class="tab-pane fade" id="tab-accounts" role="tabpanel">
           <div class="custom-card">
             <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
               <div>
                 <h6 class="mb-0 fw-bold text-primary"><i class="bi bi-person-lines-fill me-2"></i>Danh Sách Tài Khoản Cán Bộ Thẩm Định</h6>
-                <div class="small text-muted">Quản trị viên có toàn quyền cấp tài khoản mới, chỉnh sửa thông tin, đặt lại mã PIN hoặc khóa/xóa tài khoản</div>
+                <div class="small text-muted">Cấp mới, chỉnh sửa thông tin, đặt lại mã PIN hoặc khóa/xóa tài khoản</div>
               </div>
               <button class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm" onclick="openAddOfficerModal()">
                 <i class="bi bi-person-plus-fill me-1"></i>Cấp Tài Khoản Mới
@@ -596,7 +596,7 @@
       </div>
     </div>
 
-    <!-- ==================== FORM KHAI BÁO BÁO CÁO CỦA CÁN BỘ ==================== -->
+    <!-- ==================== FORM KHAI BÁO CỦA CÁN BỘ ==================== -->
     <div id="officerFormSection">
       <div class="custom-card">
         <div class="card-header-gradient">
@@ -605,7 +605,7 @@
               <h5 class="mb-1 fw-bold">
                 <i class="bi bi-clipboard2-check me-2"></i>BÁO CÁO GIÁM SÁT CÔNG VIỆC HẰNG NGÀY
               </h5>
-              <div class="small text-white-50">Cán bộ điền thông tin và bắt buộc chụp ảnh hiện trường trực tiếp từ Camera</div>
+              <div class="small text-white-50">Cán bộ thẩm định điền đầy đủ thông tin & chụp ảnh trực tiếp tại hiện trường</div>
             </div>
             <i class="bi bi-geo-alt-fill fs-2 text-warning"></i>
           </div>
@@ -706,14 +706,13 @@
               </div>
             </div>
 
-            <!-- ==================== KHU VỰC CAMERA BẮT BUỘC ==================== -->
+            <!-- KHU VỰC CAMERA BẮT BUỘC -->
             <div class="mb-4">
               <label class="form-label d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-camera-fill text-danger me-1"></i>Hình ảnh minh chứng hiện trường (* Bắt buộc):</span>
-                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">Chỉ chụp trực tiếp - Không chọn ảnh từ máy</span>
+                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">Chỉ chụp trực tiếp - Không chọn ảnh cũ</span>
               </label>
 
-              <!-- Khung kích hoạt Camera -->
               <div class="camera-mandate-zone" id="uploadZone">
                 <i class="bi bi-camera-reels text-primary fs-1 mb-2 d-block"></i>
                 <h6 class="fw-bold text-dark mb-1">BẮT BUỘC TRUY CẬP CAMERA ĐỂ CHỤP ẢNH HIỆN TRƯỜNG</h6>
@@ -728,7 +727,6 @@
                   </button>
                 </div>
 
-                <!-- Input ẩn chỉ nhận capture từ camera môi trường -->
                 <input type="file" id="cameraFallbackInput" accept="image/*" capture="environment" style="display: none;" onchange="handleCameraFallbackChange(event)">
               </div>
 
@@ -767,9 +765,60 @@
       </div>
     </div>
 
+    <!-- ==================== BẢNG GHI NHẬN BÁO CÁO (NẰM NGAY PHÍA DƯỚI FORM) ==================== -->
+    <div id="publicStaffReportsSection" class="custom-card">
+      <div class="card-header bg-white py-3 border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <div>
+          <h5 class="mb-1 fw-bold text-primary">
+            <i class="bi bi-clock-history me-2"></i>BẢNG GHI NHẬN BÁO CÁO HIỆN TRƯỜNG (<span id="publicRecordCount">0</span>)
+          </h5>
+          <div class="small text-muted">
+            <span class="badge bg-success bg-opacity-10 text-success me-1"><i class="bi bi-broadcast me-1"></i>Realtime 24/24</span>
+            Sắp xếp theo ngày giờ báo cáo mới nhất lên đầu tiên. Cập nhật tức thì khi có người nộp.
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+          <!-- Nút lọc báo cáo của riêng tôi -->
+          <button type="button" class="btn btn-outline-secondary btn-sm rounded-pill px-3" onclick="toggleMyReportsFilter(this)">
+            <i class="bi bi-person me-1"></i>Chỉ xem của tôi
+          </button>
+          
+          <!-- Ô tìm kiếm nhanh -->
+          <div class="input-group input-group-sm" style="max-width: 240px;">
+            <span class="input-group-text bg-light"><i class="bi bi-search"></i></span>
+            <input type="text" id="publicStaffSearchInput" class="form-control" placeholder="Tìm kiếm nhanh...">
+          </div>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0 admin-table">
+          <thead>
+            <tr>
+              <th style="width: 45px;" class="text-center">STT</th>
+              <th style="min-width: 140px;">Thời gian nộp báo cáo</th>
+              <th>Cán bộ thực hiện</th>
+              <th>Khách hàng & Địa chỉ</th>
+              <th style="min-width: 220px;">Nội dung & Kết quả</th>
+              <th class="text-center" style="width: 110px;">Đánh giá</th>
+              <th class="text-center" style="width: 80px;">Hình ảnh</th>
+            </tr>
+          </thead>
+          <tbody id="publicStaffTableBody">
+            <tr>
+              <td colspan="7" class="text-center py-4 text-muted">
+                <div class="spinner-border spinner-border-sm text-primary me-2"></div> Đang đồng bộ dữ liệu Realtime...
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div>
 
-  <!-- ==================== MODAL CAMERA TRỰC TIẾP (LIVE CAMERA VIEWFINDER) ==================== -->
+  <!-- ==================== MODAL CAMERA TRỰC TIẾP ==================== -->
   <div class="modal fade" id="cameraModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
       <div class="modal-content bg-dark border-0 shadow-lg text-white">
@@ -783,13 +832,11 @@
           <div class="camera-viewport-container">
             <video id="cameraVideo" playsinline autoplay muted></video>
             
-            <!-- Nút điều khiển trên khung camera -->
             <div class="camera-controls-overlay">
               <button type="button" class="btn-camera-switch" onclick="switchCamera()" title="Đổi camera trước/sau">
                 <i class="bi bi-arrow-repeat"></i>
               </button>
               
-              <!-- Nút bấm chụp tròn đỏ -->
               <div class="btn-shutter" onclick="capturePhotoFromCamera()" title="Bấm để chụp ảnh">
                 <i class="bi bi-camera-fill"></i>
               </div>
@@ -916,6 +963,8 @@
     </div>
   </div>
 
+  <!-- Thư viện MQTT Realtime WebSocket 24/24 qua CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/mqtt@5.3.5/dist/mqtt.min.js"></script>
   <!-- Thư viện Supabase JS Client qua CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <!-- Bootstrap 5 JS Bundle -->
