@@ -1,85 +1,42 @@
-# HỆ THỐNG GIÁM SÁT CÔNG VIỆC THẨM ĐỊNH HIỆN TRƯỜNG (WEB SERVERLESS)
+# HỆ THỐNG GIÁM SÁT CÔNG VIỆC THẨM ĐỊNH HIỆN TRƯỜNG - V2.0
 
-Ứng dụng Web App độc lập, hoạt động hoàn toàn miễn phí, **không phụ thuộc Google Apps Script / Google Sheets / Google Drive**. 
+Ứng dụng Web App độc lập chạy trực tiếp trên GitHub Pages, hoàn toàn miễn phí, không phụ thuộc Google Sheets/Drive/Apps Script.
 
-Có thể chạy trên **bất kỳ Hosting/cPanel nào**, hoặc đưa lên các nền tảng miễn phí tốc độ cao như **Netlify, Vercel, GitHub Pages**.
-
----
-
-## 🌟 CÁC ƯU ĐIỂM VƯỢT TRỘI SO VỚI GOOGLE APPS SCRIPT
-1. **Tốc độ cực nhanh:** Là trang web tĩnh (Static Web), mở trang tức thì trong 0.5s, không bị chậm hay giật lag như Google Apps Script.
-2. **Nén ảnh trực tiếp tại điện thoại:** Cán bộ chụp ảnh 10MB - 15MB, hệ thống tự động nén xuống còn 300KB - 500KB bằng Canvas trước khi tải lên, giúp gửi báo cáo trong 1 - 2 giây ngay cả khi sóng 3G/4G yếu.
-3. **Định vị GPS thực địa:** Tích hợp nút lấy tọa độ GPS thực tế của cán bộ khi đứng tại nhà khách hàng, Admin có thể nhấp vào để kiểm tra trên Google Maps.
-4. **Ghi nhớ danh tính cán bộ:** Tự động lưu tên cán bộ trên thiết bị của họ, lần sau mở app không cần tìm chọn lại.
-5. **Xuất báo cáo Excel / CSV:** 1 click xuất toàn bộ dữ liệu báo cáo ra file Excel tiếng Việt chuẩn xác.
-6. **Xem ảnh mượt mà:** Xem ảnh thu nhỏ ngay trên bảng, bấm vào phóng to trực tiếp (Lightbox), không bị chặn quyền chia sẻ như Google Drive.
+🔗 **Địa chỉ Web chính thức:** [https://gscv246.github.io/baocao/](https://gscv246.github.io/baocao/)
 
 ---
 
-## 📁 CẤU TRÚC BỘ MÃ NGUỒN
-- `index.html`: Toàn bộ giao diện Web (gồm Form Cán bộ và Dashboard Admin).
-- `app.js`: Toàn bộ xử lý nén ảnh, định vị GPS, kết nối Database, lọc tìm kiếm.
-- `config.js`: Nơi cấu hình thông tin Supabase, mã PIN Admin và danh sách 30 cán bộ.
-- `schema.sql`: Mã lệnh tạo bảng Database và bộ nhớ lưu ảnh trên Supabase (1-click run).
+## 🌟 CÁC TÍNH NĂNG MỚI ĐƯỢC NÂNG CẤP THEO YÊU CẦU
+
+### 1. BẮT BUỘC CHỤP ẢNH TỪ CAMERA (CHẶN CHỌN ẢNH CŨ TỪ MÁY)
+- **Khung ngắm Camera trực tiếp (Live Camera Viewfinder):** Cán bộ bấm *"Bật Camera Chụp Ảnh"* ➔ Trình duyệt kích hoạt Camera thiết bị với nút chụp tròn đỏ và nút đổi camera trước/sau.
+- **Tự động đóng dấu Watermark chống gian lận:** Ảnh chụp được in chìm thông tin: `[HIỆN TRƯỜNG THẨM ĐỊNH] + Ngày giờ thực tế + Tên cán bộ + Tọa độ GPS` vào đáy ảnh.
+- **Chặn ảnh cũ trong thư viện:** Hệ thống kiểm tra thời gian tạo file, nếu phát hiện ảnh chụp cách thời điểm hiện tại quá 5 phút thì lập tức từ chối và cảnh báo.
+
+### 2. DASHBOARD THỂ HIỆN CÔNG VIỆC CỦA MỌI CÁN BỘ
+- Quản trị viên theo dõi được chi tiết hiệu suất của từng cán bộ:
+  - Tên cán bộ & Mã CB.
+  - Tổng số hồ sơ đã thực hiện.
+  - Số lượng hồ sơ: Đạt chuẩn / Chờ bổ sung / Không đạt.
+  - Tỷ lệ đạt (%) trực quan dạng thanh tiến độ (Progress Bar).
+  - Thời điểm nộp báo cáo gần nhất.
+  - Nút xem riêng các hồ sơ của cán bộ đó.
+
+### 3. QUẢN TRỊ VIÊN CẤP & CHỈNH SỬA TÀI KHOẢN CÁN BỘ
+- **Cấp tài khoản mới:** Thêm mã cán bộ (CB11, CB12...), họ tên, số điện thoại, mã PIN riêng.
+- **Chỉnh sửa tài khoản:** Cập nhật thông tin, thay đổi mã PIN cá nhân.
+- **Khóa / Mở khóa tài khoản:** Tạm khóa tài khoản cán bộ nghỉ phép hoặc thôi việc để ngăn gửi báo cáo.
+- **Xóa tài khoản:** Xóa tài khoản cán bộ khỏi hệ thống.
+- Danh sách lựa chọn ở form bên ngoài tự động cập nhật ngay khi Admin thêm/sửa tài khoản.
+
+### 4. QUYỀN XÓA DỮ LIỆU & RESET HỆ THỐNG
+- **Xóa từng mục:** Nút thùng rác ở từng dòng báo cáo.
+- **Xóa theo nội dung chọn (Bulk Delete):** Tích chọn checkbox ở các dòng cần xóa (hoặc tích Chọn tất cả) ➔ Bấm nút đỏ *"Xóa các mục đã chọn"*.
+- **Xóa toàn bộ báo cáo:** Nút xóa sạch tất cả báo cáo (yêu cầu gõ chữ xác nhận `XOA HET` để chống bấm nhầm).
+- **Reset toàn bộ dữ liệu:** Khôi phục cài đặt gốc của hệ thống.
 
 ---
 
-## 🚀 HƯỚNG DẪN TRIỂN KHAI NHANH TRONG 5 PHÚT
-
-### BƯỚC 1: DÙNG THỬ NGAY LẬP TỨC (KHÔNG CẦN CÀI ĐẶT GÌ)
-Bạn có thể mở trực tiếp tệp `index.html` trên trình duyệt máy tính hoặc điện thoại. Hệ thống sẽ tự động chạy ở **Chế độ Thử nghiệm (LocalStorage)** với dữ liệu mẫu có sẵn để bạn kiểm tra toàn bộ giao diện và tính năng.
-
----
-
-### BƯỚC 2: TẠO DATABASE & LƯU TRỮ ẢNH MIỄN PHÍ (SUPABASE)
-Supabase là nền tảng Backend Serverless miễn phí tốt nhất hiện nay:
-1. Đăng ký tài khoản miễn phí tại: **[https://supabase.com](https://supabase.com)** (đăng nhập bằng Github hoặc Email).
-2. Bấm **New Project** ➔ Đặt tên dự án (VD: `giam-sat-tham-dinh`) ➔ Chọn mật khẩu database ➔ Bấm **Create new project**.
-3. Ở menu bên trái, bấm vào biểu tượng **SQL Editor** (icon `>_`):
-   - Mở tệp `schema.sql` trong dự án này, copy toàn bộ nội dung dán vào ô SQL.
-   - Bấm nút **Run** màu xanh lá cây để hệ thống tự tạo bảng `reports` và thư mục lưu ảnh `report-images`.
-4. Lấy thông tin kết nối:
-   - Vào **Project Settings** (biểu tượng bánh răng góc dưới bên trái) ➔ Chọn **API**.
-   - Copy **Project URL** và **Project API Keys (anon public)**.
-5. Mở tệp `config.js` trên máy của bạn và dán vào:
-   ```javascript
-   const APP_CONFIG = {
-     SUPABASE_URL: "https://your-project.supabase.co", // Dán URL của bạn
-     SUPABASE_ANON_KEY: "eyJh......",                 // Dán anon key của bạn
-     ADMIN_PIN: "123456",                             // Đổi mã PIN Admin nếu muốn
-     ...
-   ```
-
----
-
-### BƯỚC 3: ĐƯA LÊN WEB ĐỂ 30 CÁN BỘ TRUY CẬP (CHỌN 1 TRONG 3 CÁCH)
-
-#### CÁCH 1: NETLIFY (KHUYÊN DÙNG - CỰC NHANH, 30 GIÂY XONG)
-1. Truy cập: **[https://app.netlify.com/drop](https://app.netlify.com/drop)**
-2. Kéo thả toàn bộ thư mục chứa các file (`index.html`, `app.js`, `config.js`) vào ô upload.
-3. Netlify sẽ cấp ngay cho bạn một đường link web miễn phí vĩnh viễn (dạng: `https://giam-sat-abc.netlify.app`) có sẵn bảo mật SSL HTTPS. Bạn chỉ cần gửi link này cho 30 cán bộ sử dụng.
-
-#### CÁCH 2: UPLOAD LÊN HOSTING CPANEL CÓ SẴN CỦA BẠN
-1. Đăng nhập vào cPanel Hosting của bạn.
-2. Vào **File Manager** ➔ Mở thư mục `public_html` (hoặc thư mục con/subdomain tùy ý).
-3. Upload 3 file: `index.html`, `app.js`, `config.js`.
-4. Truy cập theo tên miền của bạn (VD: `https://tenmien.com/diemdanh`).
-
-#### CÁCH 3: GITHUB PAGES
-1. Đẩy các file lên 1 Repository trên GitHub.
-2. Vào **Settings** ➔ **Pages** ➔ Chọn nhánh `main` ➔ Bấm **Save**.
-3. Bạn sẽ nhận được đường link web dạng `https://username.github.io/repo-name`.
-
----
-
-## 🔒 HƯỚNG DẪN SỬ DỤNG
-1. **Dành cho Cán bộ Thẩm định (30 người):**
-   - Mở link web trên điện thoại ➔ Ghim ra màn hình chính dạng Bookmark hoặc App icon.
-   - Chọn tên cán bộ lần đầu tiên (hệ thống sẽ tự nhớ vĩnh viễn trên máy).
-   - Nhập thông tin khách hàng, bấm **"Lấy vị trí GPS"** để ghi nhận tọa độ thực tế.
-   - Chạm vào ô ảnh chụp hiện trường ➔ Bấm **GỬI BÁO CÁO**.
-
-2. **Dành cho Quản trị viên (Admin):**
-   - Bấm vào nút màu vàng **"Quản Trị Viên"** trên góc phải.
-   - Nhập mã PIN (Mặc định: `123456`).
-   - Màn hình Dashboard hiện ra: xem toàn bộ báo cáo, lọc theo từng cán bộ, xem ảnh phóng to, xem vị trí Google Maps, xuất file Excel.
+## 🔑 THÔNG TIN ĐĂNG NHẬP ADMIN MẶC ĐỊNH
+- Bấm nút **"Quản Trị Viên"** màu vàng ở góc phải.
+- Mã PIN mặc định: **`123456`** (Có thể đổi trong tệp `config.js`).
