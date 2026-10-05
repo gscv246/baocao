@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Hệ Thống Giám Sát Công Việc Thẩm Định (Serverless)</title>
+
+  <!-- Google Font: Be Vietnam Pro tối ưu tiếng Việt -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Bootstrap 5 CSS & Icons qua CDN -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+
+  <style>
+    :root {
+      --primary-color: #1e40af;
+      --primary-dark: #172554;
+      --secondary-color: #0d9488;
+      --accent-color: #2563eb;
+      --bg-body: #f1f5f9;
+      --card-bg: #ffffff;
+      --text-dark: #0f172a;
+      --border-color: #e2e8f0;
+    }
+
+    * {
+      box-sizing: border-box;
+      font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-body);
+      color: var(--text-dark);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Navbar */
+    .app-navbar {
+      background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-color) 100%);
+      box-shadow: 0 4px 20px -2px rgba(30, 58, 138, 0.25);
+    }
+
+    .navbar-brand {
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      font-size: 1.15rem;
+    }
+
+    /* Main Container */
+    .main-container {
+      max-width: 1180px;
+      margin: 1.5rem auto;
+      padding: 0 1rem;
+      flex: 1;
+    }
+
+    .custom-card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+      margin-bottom: 2rem;
+    }
+
+    .card-header-gradient {
+      background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+      color: #ffffff;
+      padding: 1.25rem 1.5rem;
+    }
+
+    .form-label {
+      font-weight: 600;
+      color: #334155;
+      font-size: 0.88rem;
+      margin-bottom: 0.35rem;
+    }
+
+    .form-control, .form-select {
+      border-radius: 10px;
+      border: 1.5px solid var(--border-color);
+      padding: 0.65rem 0.9rem;
+      font-size: 0.92rem;
+      transition: all 0.2s ease-in-out;
+    }
+
+    .form-control:focus, .form-select:focus {
+      border-color: var(--accent-color);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+    }
+
+    /* Upload zone */
+    .upload-zone {
+      border: 2px dashed #94a3b8;
+      border-radius: 12px;
+      padding: 1.5rem;
+      text-align: center;
+      background: #f8fafc;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .upload-zone:hover {
+      border-color: var(--accent-color);
+      background: #eff6ff;
+    }
+
+    .preview-box {
+      position: relative;
+      display: inline-block;
+      margin-top: 0.75rem;
+      max-width: 100%;
+    }
+
+    .preview-img {
+      max-width: 100%;
+      max-height: 240px;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      object-fit: cover;
+    }
+
+    .btn-remove-preview {
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      background: #ef4444;
+      color: white;
+      border-radius: 50%;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid white;
+      cursor: pointer;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    }
+
+    /* Submit Button */
+    .btn-submit {
+      background: linear-gradient(135deg, #1e40af 0%, #2563eb 100%);
+      color: white;
+      border: none;
+      font-weight: 600;
+      padding: 0.85rem 1.5rem;
+      border-radius: 12px;
+      box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+      transition: all 0.25s ease;
+    }
+
+    .btn-submit:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
+      color: white;
+    }
+
+    .btn-submit:disabled {
+      background: #94a3b8;
+      box-shadow: none;
+      cursor: not-allowed;
+    }
+
+    /* Stat Cards */
+    .stat-card {
+      border-radius: 14px;
+      background: white;
+      border: 1px solid var(--border-color);
+      padding: 1.2rem;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.03);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .stat-icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+    }
+
+    /* Table */
+    .admin-table {
+      font-size: 0.88rem;
+    }
+
+    .admin-table th {
+      background-color: #f8fafc;
+      font-weight: 600;
+      color: #334155;
+      border-bottom: 2px solid #e2e8f0;
+      white-space: nowrap;
+    }
+
+    .thumbnail-table {
+      width: 50px;
+      height: 50px;
+      border-radius: 8px;
+      object-fit: cover;
+      cursor: pointer;
+      border: 1px solid #cbd5e1;
+      transition: transform 0.15s;
+    }
+
+    .thumbnail-table:hover {
+      transform: scale(1.15);
+    }
+
+    @media (max-width: 768px) {
+      .main-container {
+        padding: 0 0.5rem;
+        margin-top: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== HEADER NAVBAR ==================== -->
+  <nav class="navbar navbar-dark app-navbar py-2 px-3 sticky-top">
+    <div class="container-fluid d-flex justify-content-between align-items-center">
+      <div class="d-flex align-items-center gap-2">
+        <i class="bi bi-shield-check text-warning fs-3"></i>
+        <div>
+          <span class="navbar-brand mb-0 text-white">GIÁM SÁT THẨM ĐỊNH</span>
+          <div class="small text-white-50 d-none d-sm-block">Nền tảng Web độc lập (Chạy trên mọi Hosting / Netlify / Vercel)</div>
+        </div>
+      </div>
+
+      <div class="d-flex align-items-center gap-2">
+        <!-- Trạng thái kết nối Cloud Serverless -->
+        <span id="connectionStatusBadge" class="badge bg-light text-dark px-2 py-1">
+          <span class="spinner-border spinner-border-sm me-1"></span> Đang kết nối...
+        </span>
+
+        <!-- Nút đăng nhập/chuyển Admin -->
+        <div id="adminBadgeIndicator" class="d-none">
+          <span class="badge bg-danger text-white py-2 px-2 shadow-sm me-1">
+            <i class="bi bi-shield-lock-fill me-1"></i>ADMIN ACTIVE
+          </span>
+          <button class="btn btn-outline-light btn-sm" onclick="logoutAdmin()" title="Đăng xuất Admin">
+            <i class="bi bi-box-arrow-right"></i>
+          </button>
+        </div>
+
+        <button class="btn btn-warning btn-sm fw-semibold rounded-pill px-3 shadow-sm" data-bs-toggle="modal" data-bs-target="#adminLoginModal">
+          <i class="bi bi-key-fill me-1"></i>Quản Trị Viên
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ==================== NỘI DUNG CHÍNH ==================== -->
+  <div class="main-container">
+
+    <!-- ==================== PHẦN 1: BẢNG ĐIỀU KHIỂN DÀNH CHO ADMIN ==================== -->
+    <div id="adminViewSection" class="d-none">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="fw-bold mb-0 text-dark">
+          <i class="bi bi-speedometer2 text-primary me-2"></i>BÁO CÁO TỔNG HỢP - QUẢN TRỊ VIÊN
+        </h4>
+        <div class="d-flex gap-2">
+          <button class="btn btn-success btn-sm rounded-pill px-3 shadow-sm" onclick="exportReportsToCSV()">
+            <i class="bi bi-file-earmark-excel me-1"></i>Xuất Excel (.CSV)
+          </button>
+          <a href="#officerFormSection" class="btn btn-outline-primary btn-sm rounded-pill px-3">
+            <i class="bi bi-plus-circle me-1"></i>Tạo báo cáo mới
+          </a>
+        </div>
+      </div>
+
+      <!-- Thống kê nhanh Metric Cards -->
+      <div class="row g-3 mb-4">
+        <div class="col-md-3 col-sm-6">
+          <div class="stat-card">
+            <div class="stat-icon bg-primary bg-opacity-10 text-primary">
+              <i class="bi bi-journal-check"></i>
+            </div>
+            <div>
+              <div class="text-muted small">Tổng số báo cáo</div>
+              <div class="fs-4 fw-bold text-dark" id="statTotalReports">0</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+          <div class="stat-card">
+            <div class="stat-icon bg-success bg-opacity-10 text-success">
+              <i class="bi bi-calendar2-day"></i>
+            </div>
+            <div>
+              <div class="text-muted small">Báo cáo hôm nay</div>
+              <div class="fs-4 fw-bold text-dark" id="statTodayReports">0</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+          <div class="stat-card">
+            <div class="stat-icon bg-info bg-opacity-10 text-info">
+              <i class="bi bi-percent"></i>
+            </div>
+            <div>
+              <div class="text-muted small">Tỷ lệ đạt chuẩn</div>
+              <div class="fs-4 fw-bold text-dark" id="statPassRate">0%</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-sm-6">
+          <div class="stat-card">
+            <div class="stat-icon bg-warning bg-opacity-10 text-warning">
+              <i class="bi bi-people-fill"></i>
+            </div>
+            <div>
+              <div class="text-muted small">Cán bộ đã nộp</div>
+              <div class="fs-4 fw-bold text-dark" id="statActiveOfficers">0</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Thanh Tìm kiếm và Bộ lọc Admin -->
+      <div class="custom-card mb-4 p-3 bg-white">
+        <div class="row g-2 align-items-center">
+          <div class="col-md-3 col-12">
+            <div class="input-group">
+              <span class="input-group-text bg-light"><i class="bi bi-search text-muted"></i></span>
+              <input type="text" id="adminSearchInput" class="form-control" placeholder="Tìm tên KH, cán bộ, địa chỉ...">
+            </div>
+          </div>
+          <div class="col-md-3 col-6">
+            <select id="adminFilterOfficer" class="form-select">
+              <option value="">-- Tất cả cán bộ --</option>
+            </select>
+          </div>
+          <div class="col-md-2 col-6">
+            <input type="date" id="adminFilterDate" class="form-control" title="Lọc theo ngày">
+          </div>
+          <div class="col-md-2 col-6">
+            <select id="adminFilterStatus" class="form-select">
+              <option value="">-- Mọi trạng thái --</option>
+              <option value="Đạt yêu cầu">Đạt yêu cầu</option>
+              <option value="Chờ bổ sung hồ sơ">Chờ bổ sung</option>
+              <option value="Không đạt / Từ chối">Không đạt</option>
+            </select>
+          </div>
+          <div class="col-md-2 col-6 d-flex gap-2">
+            <button class="btn btn-outline-secondary w-100" id="btnResetFilter" title="Đặt lại bộ lọc">
+              <i class="bi bi-arrow-counterclockwise"></i>
+            </button>
+            <button class="btn btn-primary w-100" id="btnRefreshData" onclick="loadAdminReports()" title="Tải lại">
+              <i class="bi bi-arrow-repeat"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bảng danh sách báo cáo -->
+      <div class="custom-card">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center border-bottom">
+          <h6 class="mb-0 fw-bold text-primary">
+            <i class="bi bi-table me-2"></i>Danh Sách Báo Cáo Hiện Trường (<span id="adminRecordCount">0</span>)
+          </h6>
+          <div class="small text-muted" id="lastUpdatedStatus">Chưa tải dữ liệu</div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-hover table-striped align-middle mb-0 admin-table">
+            <thead>
+              <tr>
+                <th style="width: 45px;" class="text-center">STT</th>
+                <th>Cán bộ thẩm định</th>
+                <th>Khách hàng & Địa chỉ</th>
+                <th>Thời gian thực hiện</th>
+                <th style="min-width: 200px;">Công việc thực hiện</th>
+                <th style="min-width: 180px;">Kết quả thẩm định</th>
+                <th class="text-center">Trạng thái</th>
+                <th class="text-center">Hình ảnh</th>
+                <th>Thời gian gửi</th>
+              </tr>
+            </thead>
+            <tbody id="adminTableBody">
+              <tr>
+                <td colspan="9" class="text-center py-4 text-muted">
+                  <div class="spinner-border spinner-border-sm text-primary me-2"></div> Đang tải dữ liệu...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== PHẦN 2: FORM KHAI BÁO CỦA CÁN BỘ THẨM ĐỊNH ==================== -->
+    <div id="officerFormSection">
+      <div class="custom-card">
+        <div class="card-header-gradient">
+          <div class="d-flex align-items-center justify-content-between">
+            <div>
+              <h5 class="mb-1 fw-bold">
+                <i class="bi bi-clipboard2-check me-2"></i>BÁO CÁO GIÁM SÁT CÔNG VIỆC HẰNG NGÀY
+              </h5>
+              <div class="small text-white-50">Cán bộ thẩm định điền đầy đủ thông tin khách hàng và kết quả thực tế</div>
+            </div>
+            <i class="bi bi-geo-alt-fill fs-2 text-warning"></i>
+          </div>
+        </div>
+
+        <div class="card-body p-4">
+          <form id="reportForm" onsubmit="handleFormSubmit(event)">
+
+            <!-- TÊN CÁN BỘ & THỜI ĐIỂM -->
+            <div class="row g-3 mb-3">
+              <div class="col-md-6 col-12">
+                <label for="officerName" class="form-label">
+                  <i class="bi bi-person-badge text-primary me-1"></i>Cán bộ thẩm định (*):
+                </label>
+                <select class="form-select" id="officerName" required>
+                  <option value="">-- Đang nạp danh sách cán bộ... --</option>
+                </select>
+                <div class="form-text small">Hệ thống sẽ tự động ghi nhớ tên cán bộ cho những lần mở sau.</div>
+              </div>
+
+              <div class="col-md-6 col-12">
+                <label class="form-label">
+                  <i class="bi bi-geo text-primary me-1"></i>Định vị GPS thực địa:
+                </label>
+                <div class="d-flex align-items-center gap-2">
+                  <button type="button" id="btnGetGps" class="btn btn-outline-primary btn-sm rounded-pill py-2 px-3" onclick="captureGpsLocation()">
+                    <i class="bi bi-geo-alt me-1"></i>Lấy vị trí GPS hiện trường
+                  </button>
+                  <div id="gpsDisplay" class="small text-muted"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- THÔNG TIN KHÁCH HÀNG & ĐỊA ĐIỂM THẨM ĐỊNH -->
+            <div class="row g-3 mb-3">
+              <div class="col-md-6 col-12">
+                <label for="customerName" class="form-label">
+                  <i class="bi bi-building text-primary me-1"></i>Tên khách hàng / Số Hợp đồng:
+                </label>
+                <input type="text" class="form-control" id="customerName" placeholder="VD: Công ty TNHH Ánh Dương (HĐ-892)" required>
+              </div>
+              <div class="col-md-6 col-12">
+                <label for="appraisalAddress" class="form-label">
+                  <i class="bi bi-map text-primary me-1"></i>Địa chỉ khảo sát thực tế:
+                </label>
+                <input type="text" class="form-control" id="appraisalAddress" placeholder="VD: 128 Nguyễn Trãi, Phường 3, Quận 5, TP.HCM" required>
+              </div>
+            </div>
+
+            <!-- THỜI GIAN BẮT ĐẦU & KẾT THÚC -->
+            <div class="row g-3 mb-3">
+              <div class="col-md-3 col-6">
+                <label for="startDate" class="form-label">Ngày bắt đầu:</label>
+                <input type="date" class="form-control" id="startDate" required>
+              </div>
+              <div class="col-md-3 col-6">
+                <label for="startTime" class="form-label">Giờ bắt đầu:</label>
+                <input type="time" class="form-control" id="startTime" required>
+              </div>
+              <div class="col-md-3 col-6">
+                <label for="endDate" class="form-label">Ngày kết thúc:</label>
+                <input type="date" class="form-control" id="endDate" required>
+              </div>
+              <div class="col-md-3 col-6">
+                <label for="endTime" class="form-label">Giờ kết thúc:</label>
+                <input type="time" class="form-control" id="endTime" required>
+              </div>
+            </div>
+
+            <!-- CÔNG VIỆC THỰC HIỆN -->
+            <div class="mb-3">
+              <label for="taskDescription" class="form-label">
+                <i class="bi bi-card-text text-primary me-1"></i>Nội dung công việc thực hiện (*):
+              </label>
+              <textarea class="form-control" id="taskDescription" rows="3" 
+                placeholder="Mô tả cụ thể: kiểm tra hiện trạng tài sản, gặp đại diện khách hàng, đối chiếu giấy tờ pháp lý..." required></textarea>
+            </div>
+
+            <!-- KẾT QUẢ THẨM ĐỊNH & TRẠNG THÁI -->
+            <div class="row g-3 mb-3">
+              <div class="col-md-8 col-12">
+                <label for="taskResult" class="form-label">
+                  <i class="bi bi-check2-circle text-primary me-1"></i>Kết quả thẩm định chi tiết (*):
+                </label>
+                <textarea class="form-control" id="taskResult" rows="2" 
+                  placeholder="Ghi nhận hiện trạng, những điểm lưu ý, đánh giá khả năng thanh toán/rủi ro..." required></textarea>
+              </div>
+              <div class="col-md-4 col-12">
+                <label for="appraisalStatus" class="form-label">
+                  <i class="bi bi-flag text-primary me-1"></i>Đánh giá sơ bộ:
+                </label>
+                <select class="form-select" id="appraisalStatus">
+                  <option value="Đạt yêu cầu">Đạt yêu cầu</option>
+                  <option value="Chờ bổ sung hồ sơ">Chờ bổ sung hồ sơ</option>
+                  <option value="Không đạt / Từ chối">Không đạt / Từ chối</option>
+                  <option value="Cần thẩm định lại">Cần thẩm định lại</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- HÌNH ẢNH HIỆN TRƯỜNG -->
+            <div class="mb-4">
+              <label class="form-label">
+                <i class="bi bi-camera text-primary me-1"></i>Hình ảnh minh chứng hiện trường:
+              </label>
+
+              <div class="upload-zone" id="uploadZone" onclick="document.getElementById('imageFileInput').click()">
+                <i class="bi bi-cloud-arrow-up text-primary fs-1 mb-2 d-block"></i>
+                <span class="fw-semibold text-dark">Chạm vào đây để chụp ảnh thực địa hoặc chọn từ máy</span>
+                <p class="text-muted small mb-0 mt-1">Ảnh tự động được nén tối ưu dung lượng để gửi nhanh ngay cả khi mạng 3G/4G yếu</p>
+                <input type="file" id="imageFileInput" accept="image/*" capture="environment" style="display: none;" onchange="handleImageSelect(event)">
+              </div>
+
+              <div id="imagePreviewContainer" class="text-center d-none">
+                <div class="preview-box">
+                  <img id="imagePreview" class="preview-img" src="" alt="Ảnh xem trước">
+                  <div class="btn-remove-preview" onclick="removeSelectedImage()" title="Xóa ảnh này">
+                    <i class="bi bi-x"></i>
+                  </div>
+                </div>
+                <div class="small text-muted mt-1" id="fileInfoText"></div>
+              </div>
+            </div>
+
+            <!-- NÚT GỬI BÁO CÁO -->
+            <div class="d-grid gap-2">
+              <button type="submit" id="btnSubmitReport" class="btn btn-submit py-3 fs-6">
+                <span id="btnSubmitText">
+                  <i class="bi bi-send-fill me-2"></i>GỬI BÁO CÁO GIÁM SÁT
+                </span>
+                <span id="btnSubmitSpinner" class="d-none">
+                  <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                  Đang tải ảnh lên Cloud & lưu báo cáo...
+                </span>
+              </button>
+            </div>
+
+          </form>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ==================== MODAL ĐĂNG NHẬP ADMIN ==================== -->
+  <div class="modal fade" id="adminLoginModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-dark text-white py-2">
+          <h6 class="modal-title"><i class="bi bi-shield-lock me-2 text-warning"></i>Xác thực Quản trị viên</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <form onsubmit="handleAdminLogin(event)">
+          <div class="modal-body p-4 text-center">
+            <i class="bi bi-person-lock text-primary fs-1 mb-2 d-block"></i>
+            <p class="small text-muted mb-3">Nhập mã PIN để truy cập Dashboard và xem dữ liệu của 30 cán bộ</p>
+            <input type="password" id="adminPinInput" class="form-control text-center fs-4 fw-bold letter-spacing-lg mb-2" placeholder="••••••" maxlength="10" required autofocus>
+            <div class="small text-muted">Mã PIN mặc định: <strong>123456</strong> (Đổi trong config.js)</div>
+          </div>
+          <div class="modal-footer py-2 bg-light">
+            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Hủy</button>
+            <button type="submit" class="btn btn-sm btn-primary px-3">Xác nhận</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL XEM ẢNH PHÓNG TO (LIGHTBOX) ==================== -->
+  <div class="modal fade" id="imageLightboxModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-header bg-dark text-white py-2">
+          <h6 class="modal-title" id="lightboxTitle"><i class="bi bi-image me-2"></i>Ảnh hiện trường</h6>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body text-center p-2 bg-black">
+          <img id="lightboxImage" src="" class="img-fluid rounded" style="max-height: 80vh;" alt="Chi tiết ảnh">
+        </div>
+        <div class="modal-footer py-2 bg-dark d-flex justify-content-between">
+          <a id="lightboxDirectLink" href="#" target="_blank" class="btn btn-sm btn-outline-light">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Mở ảnh gốc
+          </a>
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Đóng</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== TOAST THÔNG BÁO ==================== -->
+  <div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 1099;">
+    <div id="appToast" class="toast align-items-center text-white border-0 shadow-lg" role="alert">
+      <div class="d-flex">
+        <div class="toast-body fs-6" id="appToastMessage">Thông báo</div>
+        <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Thư viện Supabase JS Client qua CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Bootstrap 5 JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- Nạp cấu hình & Logic ứng dụng -->
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
