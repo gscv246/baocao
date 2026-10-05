@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Hệ Thống Giám Sát Công Việc Thẩm Định Hiện Trường (Realtime 24/24)</title>
+  <title>Hệ Thống Giám Sát Công Việc (Realtime 24/24)</title>
 
   <!-- Google Font: Be Vietnam Pro -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -48,7 +48,7 @@
     .navbar-brand {
       font-weight: 700;
       letter-spacing: -0.3px;
-      font-size: 1.15rem;
+      font-size: 1.2rem;
     }
 
     .main-container {
@@ -294,7 +294,6 @@
       transform: scale(1.15);
     }
 
-    /* Pulse animation cho bản ghi mới thêm */
     tr.table-success {
       animation: highlightFade 4s ease forwards;
     }
@@ -304,7 +303,6 @@
       100% { background-color: transparent; }
     }
 
-    /* Nav Tabs */
     .nav-tabs .nav-link {
       font-weight: 600;
       color: #64748b;
@@ -335,7 +333,7 @@
       <div class="d-flex align-items-center gap-2">
         <i class="bi bi-shield-check text-warning fs-3"></i>
         <div>
-          <span class="navbar-brand mb-0 text-white">GIÁM SÁT THẨM ĐỊNH</span>
+          <span class="navbar-brand mb-0 text-white">GIÁM SÁT CÔNG VIỆC</span>
           <div class="small text-white-50 d-none d-sm-block">Hệ thống báo cáo Realtime 24/24 đa thiết bị</div>
         </div>
       </div>
@@ -444,7 +442,7 @@
               <div class="stat-card">
                 <div class="stat-icon bg-warning bg-opacity-10 text-warning"><i class="bi bi-people-fill"></i></div>
                 <div>
-                  <div class="text-muted small">Cán bộ đã nộp hồ sơ</div>
+                  <div class="text-muted small">Cán bộ đã nộp báo cáo</div>
                   <div class="fs-4 fw-bold text-dark" id="statActiveOfficers">0</div>
                 </div>
               </div>
@@ -456,7 +454,7 @@
             <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
               <div>
                 <h6 class="mb-1 fw-bold text-primary"><i class="bi bi-bar-chart-line me-2"></i>Bảng Tổng Hợp Công Việc Của Mọi Cán Bộ</h6>
-                <div class="small text-muted">Thống kê số lượng hồ sơ thẩm định và tiến độ thực tế của từng nhân sự</div>
+                <div class="small text-muted">Thống kê số lượng hồ sơ công việc và tiến độ thực tế của từng nhân sự</div>
               </div>
             </div>
             <div class="table-responsive">
@@ -464,7 +462,7 @@
                 <thead>
                   <tr>
                     <th style="width: 45px;" class="text-center">STT</th>
-                    <th>Cán bộ thẩm định</th>
+                    <th>Cán bộ thực hiện</th>
                     <th class="text-center">Tổng hồ sơ</th>
                     <th class="text-center">Đạt</th>
                     <th class="text-center">Chờ bổ sung</th>
@@ -562,7 +560,7 @@
           <div class="custom-card">
             <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
               <div>
-                <h6 class="mb-0 fw-bold text-primary"><i class="bi bi-person-lines-fill me-2"></i>Danh Sách Tài Khoản Cán Bộ Thẩm Định</h6>
+                <h6 class="mb-0 fw-bold text-primary"><i class="bi bi-person-lines-fill me-2"></i>Danh Sách Tài Khoản Cán Bộ</h6>
                 <div class="small text-muted">Cấp mới, chỉnh sửa thông tin, đặt lại mã PIN hoặc khóa/xóa tài khoản</div>
               </div>
               <button class="btn btn-primary btn-sm rounded-pill px-3 shadow-sm" onclick="openAddOfficerModal()">
@@ -605,7 +603,7 @@
               <h5 class="mb-1 fw-bold">
                 <i class="bi bi-clipboard2-check me-2"></i>BÁO CÁO GIÁM SÁT CÔNG VIỆC HẰNG NGÀY
               </h5>
-              <div class="small text-white-50">Cán bộ thẩm định điền đầy đủ thông tin & chụp ảnh trực tiếp tại hiện trường</div>
+              <div class="small text-white-50">Cán bộ điền thông tin và chụp ảnh trực tiếp tại hiện trường công việc</div>
             </div>
             <i class="bi bi-geo-alt-fill fs-2 text-warning"></i>
           </div>
@@ -618,12 +616,12 @@
             <div class="row g-3 mb-3">
               <div class="col-md-6 col-12">
                 <label for="officerName" class="form-label">
-                  <i class="bi bi-person-badge text-primary me-1"></i>Cán bộ thẩm định (*):
+                  <i class="bi bi-person-badge text-primary me-1"></i>Cán bộ thực hiện (*):
                 </label>
                 <select class="form-select" id="officerName" required>
                   <option value="">-- Đang nạp danh sách cán bộ... --</option>
                 </select>
-                <div class="form-text small">Hệ thống tự động ghi nhớ cán bộ cho những lần mở sau.</div>
+                <div class="form-text small">Hệ thống tự động ghi nhớ tài khoản cho những lần mở sau.</div>
               </div>
 
               <div class="col-md-6 col-12">
@@ -643,13 +641,13 @@
             <div class="row g-3 mb-3">
               <div class="col-md-6 col-12">
                 <label for="customerName" class="form-label">
-                  <i class="bi bi-building text-primary me-1"></i>Tên khách hàng / Số Hợp đồng:
+                  <i class="bi bi-building text-primary me-1"></i>Tên khách hàng / Công việc (*):
                 </label>
                 <input type="text" class="form-control" id="customerName" placeholder="VD: Công ty TNHH Ánh Dương (HĐ-892)" required>
               </div>
               <div class="col-md-6 col-12">
                 <label for="appraisalAddress" class="form-label">
-                  <i class="bi bi-map text-primary me-1"></i>Địa chỉ khảo sát thực tế:
+                  <i class="bi bi-map text-primary me-1"></i>Địa chỉ thực tế:
                 </label>
                 <input type="text" class="form-control" id="appraisalAddress" placeholder="VD: 128 Nguyễn Trãi, Phường 3, Quận 5, TP.HCM" required>
               </div>
@@ -681,17 +679,17 @@
                 <i class="bi bi-card-text text-primary me-1"></i>Nội dung công việc thực hiện (*):
               </label>
               <textarea class="form-control" id="taskDescription" rows="3" 
-                placeholder="Mô tả cụ thể: kiểm tra hiện trạng tài sản, gặp đại diện khách hàng, đối chiếu giấy tờ pháp lý..." required></textarea>
+                placeholder="Mô tả cụ thể: nội dung công việc khảo sát, các hạng mục đã hoàn thành..." required></textarea>
             </div>
 
             <!-- KẾT QUẢ & ĐÁNH GIÁ -->
             <div class="row g-3 mb-4">
               <div class="col-md-8 col-12">
                 <label for="taskResult" class="form-label">
-                  <i class="bi bi-check2-circle text-primary me-1"></i>Kết quả thẩm định chi tiết (*):
+                  <i class="bi bi-check2-circle text-primary me-1"></i>Kết quả thực hiện chi tiết (*):
                 </label>
                 <textarea class="form-control" id="taskResult" rows="2" 
-                  placeholder="Ghi nhận hiện trạng, những điểm lưu ý, đánh giá khả năng thanh toán/rủi ro..." required></textarea>
+                  placeholder="Ghi nhận hiện trạng, những điểm lưu ý, kết luận công việc..." required></textarea>
               </div>
               <div class="col-md-4 col-12">
                 <label for="appraisalStatus" class="form-label">
@@ -701,7 +699,7 @@
                   <option value="Đạt yêu cầu">Đạt yêu cầu</option>
                   <option value="Chờ bổ sung hồ sơ">Chờ bổ sung hồ sơ</option>
                   <option value="Không đạt / Từ chối">Không đạt / Từ chối</option>
-                  <option value="Cần thẩm định lại">Cần thẩm định lại</option>
+                  <option value="Cần làm lại / Kiểm tra lại">Cần làm lại / Kiểm tra lại</option>
                 </select>
               </div>
             </div>
@@ -710,13 +708,13 @@
             <div class="mb-4">
               <label class="form-label d-flex justify-content-between align-items-center">
                 <span><i class="bi bi-camera-fill text-danger me-1"></i>Hình ảnh minh chứng hiện trường (* Bắt buộc):</span>
-                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">Chỉ chụp trực tiếp - Không chọn ảnh cũ</span>
+                <span class="badge bg-danger bg-opacity-10 text-danger border border-danger">Tự động gán Tài khoản + Ngày giờ + GPS</span>
               </label>
 
               <div class="camera-mandate-zone" id="uploadZone">
                 <i class="bi bi-camera-reels text-primary fs-1 mb-2 d-block"></i>
                 <h6 class="fw-bold text-dark mb-1">BẮT BUỘC TRUY CẬP CAMERA ĐỂ CHỤP ẢNH HIỆN TRƯỜNG</h6>
-                <p class="text-muted small mb-3">Hệ thống tự động đóng dấu Ngày giờ + Tên cán bộ + Tọa độ GPS lên ảnh để chống gian lận</p>
+                <p class="text-muted small mb-3">Khi mở camera, hệ thống sẽ <strong>tự động gán Tên tài khoản, Ngày giờ chụp và Tọa độ GPS</strong> trực tiếp vào ảnh</p>
                 
                 <div class="d-flex flex-wrap justify-content-center gap-2">
                   <button type="button" class="btn btn-camera-trigger" onclick="startLiveCamera()">
@@ -770,7 +768,7 @@
       <div class="card-header bg-white py-3 border-bottom d-flex flex-wrap justify-content-between align-items-center gap-2">
         <div>
           <h5 class="mb-1 fw-bold text-primary">
-            <i class="bi bi-clock-history me-2"></i>BẢNG GHI NHẬN BÁO CÁO HIỆN TRƯỜNG (<span id="publicRecordCount">0</span>)
+            <i class="bi bi-clock-history me-2"></i>BẢNG GHI NHẬN BÁO CÁO CÔNG VIỆC HIỆN TRƯỜNG (<span id="publicRecordCount">0</span>)
           </h5>
           <div class="small text-muted">
             <span class="badge bg-success bg-opacity-10 text-success me-1"><i class="bi bi-broadcast me-1"></i>Realtime 24/24</span>
@@ -799,7 +797,7 @@
               <th style="width: 45px;" class="text-center">STT</th>
               <th style="min-width: 140px;">Thời gian nộp báo cáo</th>
               <th>Cán bộ thực hiện</th>
-              <th>Khách hàng & Địa chỉ</th>
+              <th>Khách hàng / Công việc</th>
               <th style="min-width: 220px;">Nội dung & Kết quả</th>
               <th class="text-center" style="width: 110px;">Đánh giá</th>
               <th class="text-center" style="width: 80px;">Hình ảnh</th>
@@ -818,20 +816,32 @@
 
   </div>
 
-  <!-- ==================== MODAL CAMERA TRỰC TIẾP ==================== -->
+  <!-- ==================== MODAL CAMERA TRỰC TIẾP VỚI HUD TỰ ĐỘNG GÁN ==================== -->
   <div class="modal fade" id="cameraModal" data-bs-backdrop="static" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-lg">
       <div class="modal-content bg-dark border-0 shadow-lg text-white">
         <div class="modal-header border-secondary py-2">
-          <h6 class="modal-title"><i class="bi bi-camera-fill me-2 text-warning"></i>Khung Ngắm Camera Hiện Trường</h6>
+          <h6 class="modal-title"><i class="bi bi-camera-fill me-2 text-warning"></i>Khung Ngắm Camera Giám Sát Công Việc</h6>
           <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" onclick="stopLiveCamera()"></button>
         </div>
-        <div class="modal-body p-2">
+        <div class="modal-body p-2 position-relative">
           <div id="cameraErrorAlert" class="alert alert-warning d-none small mb-2"></div>
           
           <div class="camera-viewport-container">
             <video id="cameraVideo" playsinline autoplay muted></video>
             
+            <!-- HUD TRỰC TIẾP: HIỂN THỊ TỰ ĐỘNG TÀI KHOẢN, ĐỒNG HỒ & VỊ TRÍ TRÊN KHUNG CAMERA -->
+            <div class="position-absolute top-0 start-0 end-0 p-2 text-white" style="z-index: 10; font-size: 0.8rem; background: linear-gradient(180deg, rgba(15,23,42,0.85) 0%, rgba(15,23,42,0) 100%);">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <div><i class="bi bi-person-badge-fill text-warning me-1"></i><strong id="hudOfficerName">Cán bộ</strong></div>
+                <div><i class="bi bi-clock-fill text-info me-1"></i><span id="hudLiveClock" class="fw-semibold">--:--:--</span></div>
+              </div>
+              <div class="small text-truncate text-info">
+                <i class="bi bi-geo-alt-fill text-danger me-1"></i><span id="hudGpsLocation">Đang định vị GPS...</span>
+              </div>
+            </div>
+
+            <!-- Nút điều khiển chụp -->
             <div class="camera-controls-overlay">
               <button type="button" class="btn-camera-switch" onclick="switchCamera()" title="Đổi camera trước/sau">
                 <i class="bi bi-arrow-repeat"></i>
@@ -847,7 +857,7 @@
             </div>
           </div>
           <div class="text-center text-white-50 small mt-2">
-            Đưa máy ảnh vào vật thể/địa điểm cần thẩm định rồi bấm nút tròn đỏ ở giữa
+            Đưa máy ảnh vào hiện trường công việc rồi bấm nút tròn đỏ ở giữa để chụp và đóng dấu tự động
           </div>
         </div>
         <div class="modal-footer border-secondary py-2">

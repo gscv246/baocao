@@ -1,4 +1,4 @@
-# HỆ THỐNG GIÁM SÁT CÔNG VIỆC THẨM ĐỊNH HIỆN TRƯỜNG - V2.0
+# HỆ THỐNG GIÁM SÁT CÔNG VIỆC - V4.0 (REALTIME 24/24)
 
 Ứng dụng Web App độc lập chạy trực tiếp trên GitHub Pages, hoàn toàn miễn phí, không phụ thuộc Google Sheets/Drive/Apps Script.
 
@@ -6,37 +6,36 @@
 
 ---
 
-## 🌟 CÁC TÍNH NĂNG MỚI ĐƯỢC NÂNG CẤP THEO YÊU CẦU
+## 🌟 CÁC TÍNH NĂNG NỔI BẬT
 
-### 1. BẮT BUỘC CHỤP ẢNH TỪ CAMERA (CHẶN CHỌN ẢNH CŨ TỪ MÁY)
-- **Khung ngắm Camera trực tiếp (Live Camera Viewfinder):** Cán bộ bấm *"Bật Camera Chụp Ảnh"* ➔ Trình duyệt kích hoạt Camera thiết bị với nút chụp tròn đỏ và nút đổi camera trước/sau.
-- **Tự động đóng dấu Watermark chống gian lận:** Ảnh chụp được in chìm thông tin: `[HIỆN TRƯỜNG THẨM ĐỊNH] + Ngày giờ thực tế + Tên cán bộ + Tọa độ GPS` vào đáy ảnh.
-- **Chặn ảnh cũ trong thư viện:** Hệ thống kiểm tra thời gian tạo file, nếu phát hiện ảnh chụp cách thời điểm hiện tại quá 5 phút thì lập tức từ chối và cảnh báo.
+### 1. TỰ ĐỘNG GÁN TÀI KHOẢN, NGÀY GIỜ VÀ TỌA ĐỘ VÀO ẢNH CHỤP
+- Khi mở Camera:
+  - Khung ngắm Camera hiển thị trực tiếp thanh HUD thông tin: **Tên cán bộ thực hiện | Đồng hồ đếm giây (Live) | Tọa độ GPS hiện trường**.
+  - Tự động lấy vị trí GPS trong background, người dùng không cần phải bấm nút riêng.
+- Khi bấm nút chụp:
+  - Ảnh được in chìm dải băng kiểm định Watermark chuyên nghiệp gồm:
+    - `[GIÁM SÁT CÔNG VIỆC - ẢNH HIỆN TRƯỜNG THỰC TẾ]`
+    - `Tài khoản chụp: [Tên cán bộ]`
+    - `Thời gian: [Ngày/Tháng/Năm Giờ:Phút:Giây]`
+    - `Vị trí: [Tọa độ GPS vĩ độ, kinh độ] (Xác thực hiện trường)`
+  - Ảnh này là độc nhất, chống gian lận, không thể làm giả từ ảnh cũ trong máy.
 
-### 2. DASHBOARD THỂ HIỆN CÔNG VIỆC CỦA MỌI CÁN BỘ
-- Quản trị viên theo dõi được chi tiết hiệu suất của từng cán bộ:
-  - Tên cán bộ & Mã CB.
-  - Tổng số hồ sơ đã thực hiện.
-  - Số lượng hồ sơ: Đạt chuẩn / Chờ bổ sung / Không đạt.
-  - Tỷ lệ đạt (%) trực quan dạng thanh tiến độ (Progress Bar).
-  - Thời điểm nộp báo cáo gần nhất.
-  - Nút xem riêng các hồ sơ của cán bộ đó.
+### 2. ĐỒNG BỘ REALTIME 24/24 ĐA THIẾT BỊ (WEBSOCKET MQTT)
+- Tiếp nhận đồng thời cao: Hàng chục cán bộ cùng bấm gửi 1 lúc vẫn nhận đủ 100% không mất dữ liệu.
+- Tốc độ truyền dưới 0.1 giây: Khi một cán bộ nộp báo cáo, tất cả các máy khác tự động nhảy dòng mới mà không cần tải lại trang.
 
-### 3. QUẢN TRỊ VIÊN CẤP & CHỈNH SỬA TÀI KHOẢN CÁN BỘ
-- **Cấp tài khoản mới:** Thêm mã cán bộ (CB11, CB12...), họ tên, số điện thoại, mã PIN riêng.
-- **Chỉnh sửa tài khoản:** Cập nhật thông tin, thay đổi mã PIN cá nhân.
-- **Khóa / Mở khóa tài khoản:** Tạm khóa tài khoản cán bộ nghỉ phép hoặc thôi việc để ngăn gửi báo cáo.
-- **Xóa tài khoản:** Xóa tài khoản cán bộ khỏi hệ thống.
-- Danh sách lựa chọn ở form bên ngoài tự động cập nhật ngay khi Admin thêm/sửa tài khoản.
+### 3. BẢNG GHI NHẬN NẰM NGAY PHÍA DƯỚI FORM
+- Cán bộ nộp xong nhìn thấy ngay báo cáo của mình xuất hiện tại bảng phía dưới.
+- Dòng vừa nộp có hiệu ứng phát sáng xanh nhẹ (Highlight Pulse).
+- Sắp xếp nghiêm ngặt theo ngày giờ báo cáo: **Báo cáo mới nhất luôn nằm ở dòng đầu tiên**.
 
-### 4. QUYỀN XÓA DỮ LIỆU & RESET HỆ THỐNG
-- **Xóa từng mục:** Nút thùng rác ở từng dòng báo cáo.
-- **Xóa theo nội dung chọn (Bulk Delete):** Tích chọn checkbox ở các dòng cần xóa (hoặc tích Chọn tất cả) ➔ Bấm nút đỏ *"Xóa các mục đã chọn"*.
-- **Xóa toàn bộ báo cáo:** Nút xóa sạch tất cả báo cáo (yêu cầu gõ chữ xác nhận `XOA HET` để chống bấm nhầm).
-- **Reset toàn bộ dữ liệu:** Khôi phục cài đặt gốc của hệ thống.
+### 4. BẢNG ĐIỀU KHIỂN QUẢN TRỊ VIÊN (ADMIN DASHBOARD)
+- **Dashboard Hiệu suất cán bộ:** Bảng tổng hợp công việc của từng người, tỷ lệ hoàn thành, thời điểm nộp gần nhất.
+- **Quản lý tài khoản:** Cấp tài khoản mới, chỉnh sửa thông tin, đặt lại mã PIN, khóa/xóa tài khoản.
+- **Xóa dữ liệu & Reset:** Xóa từng mục, xóa theo checkbox đã chọn, xóa toàn bộ và khôi phục cài đặt gốc.
 
 ---
 
 ## 🔑 THÔNG TIN ĐĂNG NHẬP ADMIN MẶC ĐỊNH
-- Bấm nút **"Quản Trị Viên"** màu vàng ở góc phải.
-- Mã PIN mặc định: **`123456`** (Có thể đổi trong tệp `config.js`).
+- Bấm nút **"Quản Trị Viên"** màu vàng ở góc trên bên phải.
+- Mã PIN mặc định: **`123456`** (Có thể thay đổi trong tệp `config.js`).

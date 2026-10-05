@@ -1,13 +1,13 @@
 /**
  * ==============================================================================
- * LOGIC HỆ THỐNG GIÁM SÁT CÔNG VIỆC THẨM ĐỊNH (SERVERLESS REALTIME 24/24) - V3.0
- * Các nâng cấp chủ đạo:
- * 1. REALTIME 24/24: Kết nối WebSocket đa thiết bị qua MQTT Broker (chạy liên tục 24/7)
- * 2. TIẾP NHẬN ĐỒNG THỜI CAO: Nhiều cán bộ cùng bấm gửi 1 lúc vẫn nhận đủ 100% không mất dữ liệu
- * 3. BẢNG GHI NHẬN PHÍA DƯỚI FORM: Cán bộ gửi xong thấy ngay báo cáo ở bảng dưới, sắp xếp ngày giờ mới nhất lên đầu
- * 4. CAMERA TRỰC TIẾP: Bắt buộc chụp ảnh, chặn chọn ảnh cũ từ máy, đóng dấu Watermark kiểm định
- * 5. QUẢN LÝ TÀI KHOẢN CÁN BỘ: Thêm/Sửa/Khóa/Xóa tài khoản, tự động đồng bộ sang tất cả máy khác
- * 6. XÓA DỮ LIỆU & RESET: Xóa từng mục, xóa theo checkbox đã chọn, xóa toàn bộ và khôi phục gốc
+ * LOGIC HỆ THỐNG GIÁM SÁT CÔNG VIỆC (SERVERLESS REALTIME 24/24) - V4.0
+ * Các tính năng chính:
+ * 1. Tự động gán Tên tài khoản, Ngày giờ chụp và Tọa độ GPS trực tiếp vào ảnh khi mở camera
+ * 2. Hiển thị HUD Live (Tài khoản, Đồng hồ đếm giây, Tọa độ GPS) ngay trên khung ngắm Camera
+ * 3. Đổi tên thương hiệu chuẩn mực thành "GIÁM SÁT CÔNG VIỆC"
+ * 4. Đồng bộ Realtime 24/24 đa thiết bị qua WebSocket MQTT
+ * 5. Bảng ghi nhận báo cáo nằm ngay phía dưới form, xếp ngày giờ mới nhất lên đầu
+ * 6. Quản trị viên cấp & chỉnh sửa tài khoản, xóa dữ liệu và reset hệ thống
  * ==============================================================================
  */
 
@@ -22,6 +22,7 @@ let currentGpsLocation = null;
 let activeCameraStream = null;
 let currentFacingMode = "environment";
 let filterOnlyMyReports = false;
+let cameraClockInterval = null;
 
 // Khởi chạy khi DOM sẵn sàng
 document.addEventListener("DOMContentLoaded", () => {
@@ -31,13 +32,14 @@ document.addEventListener("DOMContentLoaded", () => {
   setupEventListeners();
   checkAdminSession();
   initRealtimeWebSocket();
+  // Tự động xin quyền và lấy GPS sẵn ngay khi mở trang web
+  fetchGpsAutomatically(false);
 });
 
 /**
  * 1. KHỞI TẠO HỆ THỐNG & KẾT NỐI REALTIME WEBSOCKET 24/24
  */
 function initSystem() {
-  // Kiểm tra Supabase
   if (APP_CONFIG.SUPABASE_URL && APP_CONFIG.SUPABASE_ANON_KEY && typeof supabase !== "undefined") {
     try {
       supabaseClient = supabase.createClient(APP_CONFIG.SUPABASE_URL, APP_CONFIG.SUPABASE_ANON_KEY);
@@ -48,7 +50,6 @@ function initSystem() {
     }
   }
 
-  // Nạp dữ liệu ban đầu
   currentReports = getLocalReports();
   renderAllTables();
 }
@@ -60,7 +61,7 @@ function initRealtimeWebSocket() {
   const statusBadge = document.getElementById("connectionStatusBadge");
 
   if (typeof mqtt === "undefined") {
-    console.warn("Thư viện MQTT chưa nạp, sử dụng đồng bộ cục bộ.");
+    console.warn("Thư viện MQTT chưa nạp.");
     return;
   }
 
@@ -81,13 +82,11 @@ function initRealtimeWebSocket() {
         statusBadge.innerHTML = '<span class="spinner-grow spinner-grow-sm text-success me-1"></span>Realtime 24/24 Online';
       }
 
-      // Đăng ký nhận dữ liệu từ các kênh
       mqttClient.subscribe(APP_CONFIG.REALTIME_TOPIC, { qos: 1 });
       mqttClient.subscribe(APP_CONFIG.REALTIME_TOPIC + "/action", { qos: 1 });
       mqttClient.subscribe(APP_CONFIG.REALTIME_TOPIC + "/sync_req", { qos: 1 });
       mqttClient.subscribe(APP_CONFIG.REALTIME_TOPIC + "/sync_res", { qos: 1 });
 
-      // Khi vừa kết nối, yêu cầu các thiết bị khác đồng bộ dữ liệu mới nhất (nếu có)
       publishRealtimeMessage(APP_CONFIG.REALTIME_TOPIC + "/sync_req", { reqClientId: clientId });
     });
 
@@ -116,16 +115,10 @@ function initRealtimeWebSocket() {
   }
 }
 
-/**
- * XỬ LÝ DỮ LIỆU NHẬN ĐƯỢC TỪ CÁC MÁY KHÁC TRUYỀN VỀ TRONG 0.1 GIÂY
- */
 function handleIncomingRealtimeMessage(topic, payload) {
   if (topic === APP_CONFIG.REALTIME_TOPIC) {
-    // Có người nộp báo cáo mới!
     if (payload && payload.type === "NEW_REPORT" && payload.data) {
       const newReport = payload.data;
-      
-      // Kiểm tra trùng lặp để tiếp nhận nhiều người cùng lúc không bao giờ lỗi
       const exists = currentReports.some(r => String(r.id) === String(newReport.id));
       if (!exists) {
         currentReports.unshift(newReport);
@@ -133,13 +126,11 @@ function handleIncomingRealtimeMessage(topic, payload) {
         saveLocalReports(currentReports);
         renderAllTables(newReport.id);
 
-        // Thông báo chuông nhẹ trên màn hình
         showToast(`🔔 Cán bộ <strong>${escapeHtml(newReport.officer_name)}</strong> vừa nộp báo cáo lúc ${formatTimeOnly(newReport.created_at)}!`, "info");
       }
     }
   } 
   else if (topic === APP_CONFIG.REALTIME_TOPIC + "/action") {
-    // Nhận lệnh xóa hoặc reset từ Admin
     if (payload.type === "DELETE_REPORTS" && payload.ids) {
       const delSet = new Set(payload.ids.map(String));
       currentReports = currentReports.filter(r => !delSet.has(String(r.id)));
@@ -158,7 +149,6 @@ function handleIncomingRealtimeMessage(topic, payload) {
     }
   }
   else if (topic === APP_CONFIG.REALTIME_TOPIC + "/sync_req") {
-    // Thiết bị khác yêu cầu đồng bộ, nếu máy mình có nhiều dữ liệu hơn thì chia sẻ
     if (currentReports.length > 0) {
       publishRealtimeMessage(APP_CONFIG.REALTIME_TOPIC + "/sync_res", {
         reports: currentReports,
@@ -182,9 +172,6 @@ function publishRealtimeMessage(topic, dataObj) {
   }
 }
 
-/**
- * Hợp nhất dữ liệu không trùng lặp
- */
 function mergeReportsData(incomingReports) {
   let hasChange = false;
   const map = new Map();
@@ -214,14 +201,11 @@ function mergeOfficersData(incomingOfficers) {
   }
 }
 
-/**
- * SẮP XẾP BÁO CÁO THEO NGÀY GIỜ BÁO CÁO MỚI NHẤT LÊN ĐẦU
- */
 function sortReportsByDateTime() {
   currentReports.sort((a, b) => {
     const timeA = new Date(a.created_at || (a.start_date + "T" + (a.start_time || "00:00"))).getTime();
     const timeB = new Date(b.created_at || (b.start_date + "T" + (b.start_time || "00:00"))).getTime();
-    return timeB - timeA; // Mới nhất lên đầu
+    return timeB - timeA;
   });
 }
 
@@ -275,7 +259,6 @@ function saveLocalOfficers(officers) {
   localStorage.setItem("app_officers_list", JSON.stringify(officers));
   populateOfficerDropdown();
   renderOfficersTable();
-  // Phát tín hiệu Realtime cập nhật danh sách cán bộ sang các máy khác
   publishRealtimeMessage(APP_CONFIG.REALTIME_TOPIC + "/action", {
     type: "UPDATE_OFFICERS",
     officers: currentOfficers
@@ -288,7 +271,7 @@ function populateOfficerDropdown() {
   const savedOfficer = localStorage.getItem("last_selected_officer") || "";
 
   if (officerSelect) {
-    officerSelect.innerHTML = '<option value="">-- Chọn cán bộ thẩm định --</option>';
+    officerSelect.innerHTML = '<option value="">-- Chọn cán bộ thực hiện --</option>';
     currentOfficers
       .filter(o => o.status === "active")
       .forEach(o => {
@@ -299,12 +282,19 @@ function populateOfficerDropdown() {
         officerSelect.appendChild(opt);
       });
 
+    // Nếu chưa chọn ai, tự động chọn người đầu tiên
+    if (!officerSelect.value && officerSelect.options.length > 1) {
+      officerSelect.selectedIndex = 1;
+      localStorage.setItem("last_selected_officer", officerSelect.value);
+    }
+
     officerSelect.addEventListener("change", (e) => {
       if (e.target.value) {
         localStorage.setItem("last_selected_officer", e.target.value);
         if (filterOnlyMyReports) {
           applyPublicStaffFilter();
         }
+        updateCameraHudInfo();
       }
     });
   }
@@ -324,9 +314,94 @@ function populateOfficerDropdown() {
 }
 
 /**
- * 3. TÍNH NĂNG CAMERA TRỰC TIẾP (BẮT BUỘC CHỤP ẢNH HIỆN TRƯỜNG)
+ * 3. TÍNH NĂNG TỰ ĐỘNG GÁN TÀI KHOẢN, NGÀY GIỜ VÀ VỊ TRÍ KHI MỞ CAMERA
+ */
+
+// Tự động lấy vị trí GPS trong background
+function fetchGpsAutomatically(showNotification = true) {
+  if (!navigator.geolocation) {
+    updateCameraHudGpsText("Thiết bị không hỗ trợ GPS");
+    return;
+  }
+
+  updateCameraHudGpsText("Đang định vị GPS...");
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      currentGpsLocation = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude
+      };
+
+      const gpsCoordsText = `${currentGpsLocation.lat.toFixed(5)}, ${currentGpsLocation.lng.toFixed(5)}`;
+      updateCameraHudGpsText(`GPS: ${gpsCoordsText}`);
+
+      // Cập nhật giao diện ngoài form
+      const gpsBtn = document.getElementById("btnGetGps");
+      const gpsDisplay = document.getElementById("gpsDisplay");
+      if (gpsBtn) {
+        gpsBtn.className = "btn btn-outline-success btn-sm rounded-pill py-2 px-3";
+        gpsBtn.innerHTML = '<i class="bi bi-geo-alt-fill text-danger me-1"></i>Đã gán vị trí';
+      }
+      if (gpsDisplay) {
+        gpsDisplay.innerHTML = `<a href="https://maps.google.com/?q=${currentGpsLocation.lat},${currentGpsLocation.lng}" target="_blank" class="small text-decoration-none text-success fw-semibold">
+          <i class="bi bi-pin-map-fill text-danger"></i> ${gpsCoordsText} (Xem bản đồ)
+        </a>`;
+      }
+
+      if (showNotification) {
+        showToast(`📍 Đã tự động gán tọa độ GPS: ${gpsCoordsText}`, "success");
+      }
+    },
+    (err) => {
+      console.warn("GPS error:", err);
+      updateCameraHudGpsText("Chưa bật quyền định vị");
+    },
+    { enableHighAccuracy: true, timeout: 8000 }
+  );
+}
+
+function updateCameraHudInfo() {
+  const officerSelect = document.getElementById("officerName");
+  const officerName = officerSelect?.value || localStorage.getItem("last_selected_officer") || "Cán bộ công việc";
+  const hudOfficer = document.getElementById("hudOfficerName");
+  if (hudOfficer) hudOfficer.textContent = officerName;
+
+  updateCameraHudClock();
+}
+
+function updateCameraHudClock() {
+  const hudClock = document.getElementById("hudLiveClock");
+  if (hudClock) {
+    const now = new Date();
+    hudClock.textContent = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth()+1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+  }
+}
+
+function updateCameraHudGpsText(text) {
+  const hudGps = document.getElementById("hudGpsLocation");
+  if (hudGps) hudGps.textContent = text;
+}
+
+/**
+ * KHI MỞ CAMERA: TỰ ĐỘNG GÁN TÀI KHOẢN, BẮT ĐẦU ĐỒNG HỒ & LẤY TỌA ĐỘ GPS NGAY LẬP TỨC
  */
 async function startLiveCamera() {
+  // 1. Tự động kiểm tra và gán tài khoản chụp
+  const officerSelect = document.getElementById("officerName");
+  if (!officerSelect.value && officerSelect.options.length > 1) {
+    officerSelect.selectedIndex = 1;
+    localStorage.setItem("last_selected_officer", officerSelect.value);
+  }
+
+  // 2. Tự động lấy vị trí GPS ngay lập tức
+  fetchGpsAutomatically(false);
+
+  // 3. Khởi động đồng hồ đếm giây trên khung ngắm Camera
+  updateCameraHudInfo();
+  if (cameraClockInterval) clearInterval(cameraClockInterval);
+  cameraClockInterval = setInterval(updateCameraHudClock, 1000);
+
   const modalEl = document.getElementById("cameraModal");
   const cameraVideo = document.getElementById("cameraVideo");
   const cameraError = document.getElementById("cameraErrorAlert");
@@ -339,14 +414,14 @@ async function startLiveCamera() {
 }
 
 async function openCameraStream(videoEl, errorEl) {
-  stopLiveCamera();
+  stopLiveCameraStreamOnly();
 
   try {
     const constraints = {
       video: {
         facingMode: { ideal: currentFacingMode },
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
+        width: { ideal: 1920 },
+        height: { ideal: 1080 }
       },
       audio: false
     };
@@ -355,9 +430,9 @@ async function openCameraStream(videoEl, errorEl) {
     videoEl.srcObject = activeCameraStream;
     await videoEl.play();
   } catch (err) {
-    console.warn("Lỗi camera trực tiếp:", err);
+    console.warn("Lỗi camera stream:", err);
     errorEl.classList.remove("d-none");
-    errorEl.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i>Trình duyệt chặn mở camera trực tiếp. Bạn hãy bấm nút <strong>"Camera Hệ Thống"</strong> bên dưới để chụp.`;
+    errorEl.innerHTML = `<i class="bi bi-exclamation-triangle-fill me-1"></i>Trình duyệt chặn mở camera trực tiếp. Bạn hãy bấm nút <strong>"Camera Hệ Thống"</strong> bên dưới.`;
   }
 }
 
@@ -368,13 +443,76 @@ function switchCamera() {
   openCameraStream(cameraVideo, cameraError);
 }
 
-function stopLiveCamera() {
+function stopLiveCameraStreamOnly() {
   if (activeCameraStream) {
     activeCameraStream.getTracks().forEach(track => track.stop());
     activeCameraStream = null;
   }
 }
 
+function stopLiveCamera() {
+  stopLiveCameraStreamOnly();
+  if (cameraClockInterval) {
+    clearInterval(cameraClockInterval);
+    cameraClockInterval = null;
+  }
+}
+
+/**
+ * ĐÓNG DẤU WATERMARK CHUYÊN NGHIỆP: TÀI KHOẢN + NGÀY GIỜ + TỌA ĐỘ GPS
+ */
+function applyWatermarkToCanvas(canvas) {
+  const ctx = canvas.getContext("2d");
+  const now = new Date();
+  const timeString = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth()+1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+  
+  const officerSelect = document.getElementById("officerName");
+  const officerText = officerSelect?.value || localStorage.getItem("last_selected_officer") || "Cán bộ công việc";
+  
+  let gpsText = "Tọa độ: Đang bật định vị thiết bị";
+  if (currentGpsLocation) {
+    gpsText = `GPS: ${currentGpsLocation.lat.toFixed(5)}, ${currentGpsLocation.lng.toFixed(5)}`;
+  }
+
+  // Chiều cao dải băng Watermark tương thích với kích thước ảnh
+  const bannerHeight = Math.max(70, Math.round(canvas.height * 0.12));
+  
+  // Vẽ dải băng nền tối mờ
+  ctx.fillStyle = "rgba(15, 23, 42, 0.82)";
+  ctx.fillRect(0, canvas.height - bannerHeight, canvas.width, bannerHeight);
+
+  // Đường viền ngăn cách màu xanh
+  ctx.strokeStyle = "#3b82f6";
+  ctx.lineWidth = Math.max(2, Math.round(canvas.height * 0.004));
+  ctx.beginPath();
+  ctx.moveTo(0, canvas.height - bannerHeight);
+  ctx.lineTo(canvas.width, canvas.height - bannerHeight);
+  ctx.stroke();
+
+  // Kích thước chữ tỷ lệ theo khung hình
+  const fontSizeHeader = Math.max(13, Math.round(bannerHeight * 0.24));
+  const fontSizeContent = Math.max(12, Math.round(bannerHeight * 0.22));
+
+  // Dòng 1: Tiêu đề hệ thống (Màu vàng rực rỡ)
+  ctx.fillStyle = "#facc15";
+  ctx.font = `bold ${fontSizeHeader}px 'Be Vietnam Pro', sans-serif`;
+  ctx.textBaseline = "top";
+  ctx.fillText("GIÁM SÁT CÔNG VIỆC - ẢNH HIỆN TRƯỜNG THỰC TẾ", 18, canvas.height - bannerHeight + 10);
+
+  // Dòng 2: Tên tài khoản & Ngày giờ chụp (Màu trắng)
+  ctx.fillStyle = "#ffffff";
+  ctx.font = `600 ${fontSizeContent}px 'Be Vietnam Pro', sans-serif`;
+  ctx.fillText(`Tài khoản chụp: ${officerText}  |  Thời gian: ${timeString}`, 18, canvas.height - bannerHeight + 10 + fontSizeHeader + 6);
+
+  // Dòng 3: Tọa độ GPS thực địa (Màu xanh Cyan)
+  ctx.fillStyle = "#38bdf8";
+  ctx.font = `500 ${fontSizeContent}px 'Be Vietnam Pro', sans-serif`;
+  ctx.fillText(`Vị trí: ${gpsText} (Xác thực hiện trường)`, 18, canvas.height - bannerHeight + 10 + fontSizeHeader + fontSizeContent + 12);
+}
+
+/**
+ * BẤM CHỤP ẢNH TỪ CAMERA TRỰC TIẾP
+ */
 function capturePhotoFromCamera() {
   const video = document.getElementById("cameraVideo");
   if (!video || !video.videoWidth) {
@@ -387,46 +525,38 @@ function capturePhotoFromCamera() {
   canvas.height = video.videoHeight;
   const ctx = canvas.getContext("2d");
 
+  // Vẽ khung hình video
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-  // ĐÓNG DẤU THỜI GIAN & TỌA ĐỘ GPS (WATERMARK KIỂM ĐỊNH)
-  const now = new Date();
-  const timeString = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth()+1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-  const officerText = document.getElementById("officerName").value || "Cán bộ thẩm định";
-  let watermarkText = `[HIỆN TRƯỜNG THẨM ĐỊNH] ${timeString} | ${officerText}`;
-  if (currentGpsLocation) {
-    watermarkText += ` | GPS: ${currentGpsLocation.lat.toFixed(5)}, ${currentGpsLocation.lng.toFixed(5)}`;
-  }
-
-  const barHeight = Math.max(36, Math.round(canvas.height * 0.06));
-  ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
-  ctx.fillRect(0, canvas.height - barHeight, canvas.width, barHeight);
-
-  ctx.fillStyle = "#facc15";
-  ctx.font = `bold ${Math.round(barHeight * 0.42)}px 'Be Vietnam Pro', sans-serif`;
-  ctx.textBaseline = "middle";
-  ctx.fillText(watermarkText, 15, canvas.height - (barHeight / 2));
+  // ĐÓNG DẤU TỰ ĐỘNG: TÀI KHOẢN + NGÀY GIỜ + VỊ TRÍ GPS VÀO ẢNH
+  applyWatermarkToCanvas(canvas);
 
   canvas.toBlob((blob) => {
     if (blob) {
-      const fileName = `CHUP_THUC_DIA_${Date.now()}.jpg`;
+      const fileName = `CHUP_HIEN_TRUONG_${Date.now()}.jpg`;
       selectedImageFile = new File([blob], fileName, { type: "image/jpeg", lastModified: Date.now() });
 
       document.getElementById("imagePreview").src = URL.createObjectURL(blob);
       document.getElementById("imagePreviewContainer").classList.remove("d-none");
       document.getElementById("uploadZone").classList.add("d-none");
-      document.getElementById("fileInfoText").innerHTML = `<i class="bi bi-camera-fill text-success"></i> Đã chụp trực tiếp (${(blob.size / 1024).toFixed(0)} KB - Có dấu kiểm định)`;
+      
+      const officerName = document.getElementById("officerName").value;
+      document.getElementById("fileInfoText").innerHTML = `<i class="bi bi-patch-check-fill text-success"></i> Đã gán thành công <strong>${escapeHtml(officerName)}</strong>, Ngày giờ & GPS vào ảnh!`;
 
       stopLiveCamera();
       const modal = bootstrap.Modal.getInstance(document.getElementById("cameraModal"));
       if (modal) modal.hide();
 
-      showToast("Đã chụp ảnh hiện trường thành công!", "success");
+      showToast("Đã chụp và tự động đóng dấu tài khoản, ngày giờ & vị trí vào ảnh!", "success");
     }
-  }, "image/jpeg", 0.82);
+  }, "image/jpeg", 0.85);
 }
 
+/**
+ * XỬ LÝ CAMERA HỆ THỐNG (FALLBACK) - CŨNG TỰ ĐỘNG ĐÓNG DẤU Y HỆT
+ */
 function triggerDirectCameraFallback() {
+  fetchGpsAutomatically(false);
   document.getElementById("cameraFallbackInput").click();
 }
 
@@ -434,7 +564,6 @@ function handleCameraFallbackChange(event) {
   const file = event.target.files[0];
   if (!file) return;
 
-  // CHẶN ẢNH CŨ TỪ BỘ SƯU TẬP (Quá 5 phút từ chối ngay)
   const now = Date.now();
   const fileAgeMinutes = (now - file.lastModified) / (1000 * 60);
 
@@ -444,16 +573,52 @@ function handleCameraFallbackChange(event) {
     return;
   }
 
-  compressImage(file).then(compressed => {
-    selectedImageFile = compressed;
-    document.getElementById("imagePreview").src = URL.createObjectURL(compressed);
-    document.getElementById("imagePreviewContainer").classList.remove("d-none");
-    document.getElementById("uploadZone").classList.add("d-none");
-    document.getElementById("fileInfoText").innerHTML = `<i class="bi bi-camera-fill text-success"></i> Ảnh chụp mới (${(compressed.size / 1024).toFixed(0)} KB)`;
+  // Tải ảnh vào Canvas để ĐÓNG DẤU TÀI KHOẢN + NGÀY GIỜ + GPS
+  const reader = new FileReader();
+  reader.readAsDataURL(file);
+  reader.onload = (e) => {
+    const img = new Image();
+    img.src = e.target.result;
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+      const maxWidth = 1920;
+      if (width > maxWidth) {
+        height = Math.round((height * maxWidth) / width);
+        width = maxWidth;
+      }
 
-    const modal = bootstrap.Modal.getInstance(document.getElementById("cameraModal"));
-    if (modal) modal.hide();
-  });
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+
+      // ĐÓNG DẤU WATERMARK
+      applyWatermarkToCanvas(canvas);
+
+      canvas.toBlob((blob) => {
+        if (blob) {
+          selectedImageFile = new File([blob], `CHUP_HIEN_TRUONG_${Date.now()}.jpg`, {
+            type: "image/jpeg",
+            lastModified: Date.now()
+          });
+
+          document.getElementById("imagePreview").src = URL.createObjectURL(blob);
+          document.getElementById("imagePreviewContainer").classList.remove("d-none");
+          document.getElementById("uploadZone").classList.add("d-none");
+
+          const officerName = document.getElementById("officerName").value;
+          document.getElementById("fileInfoText").innerHTML = `<i class="bi bi-patch-check-fill text-success"></i> Đã gán thành công <strong>${escapeHtml(officerName)}</strong>, Ngày giờ & GPS vào ảnh!`;
+
+          const modal = bootstrap.Modal.getInstance(document.getElementById("cameraModal"));
+          if (modal) modal.hide();
+
+          showToast("Đã chụp và tự động đóng dấu tài khoản, ngày giờ & vị trí vào ảnh!", "success");
+        }
+      }, "image/jpeg", 0.85);
+    };
+  };
 }
 
 function removeSelectedImage() {
@@ -464,82 +629,12 @@ function removeSelectedImage() {
   document.getElementById("uploadZone").classList.remove("d-none");
 }
 
-function compressImage(file, maxWidth = 1280, quality = 0.8) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target.result;
-      img.onload = () => {
-        let width = img.width;
-        let height = img.height;
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
-        }
-        const canvas = document.createElement("canvas");
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(img, 0, 0, width, height);
-
-        canvas.toBlob((blob) => {
-          if (blob) {
-            resolve(new File([blob], file.name.replace(/\.[^/.]+$/, "") + ".jpg", {
-              type: "image/jpeg",
-              lastModified: Date.now()
-            }));
-          } else {
-            reject(new Error("Lỗi nén ảnh"));
-          }
-        }, "image/jpeg", quality);
-      };
-      img.onerror = reject;
-    };
-    reader.onerror = reject;
-  });
-}
-
 function captureGpsLocation() {
-  const gpsBtn = document.getElementById("btnGetGps");
-  const gpsDisplay = document.getElementById("gpsDisplay");
-
-  if (!navigator.geolocation) {
-    showToast("Trình duyệt không hỗ trợ GPS.", "warning");
-    return;
-  }
-
-  gpsBtn.disabled = true;
-  gpsBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Đang lấy GPS...';
-
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      gpsBtn.disabled = false;
-      gpsBtn.innerHTML = '<i class="bi bi-geo-alt-fill text-danger me-1"></i>Đã lấy tọa độ';
-      gpsBtn.className = "btn btn-outline-success btn-sm rounded-pill py-2 px-3";
-
-      currentGpsLocation = {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude
-      };
-
-      gpsDisplay.innerHTML = `<a href="https://maps.google.com/?q=${currentGpsLocation.lat},${currentGpsLocation.lng}" target="_blank" class="small text-decoration-none text-success fw-semibold">
-        <i class="bi bi-pin-map-fill text-danger"></i> ${currentGpsLocation.lat.toFixed(5)}, ${currentGpsLocation.lng.toFixed(5)} (Bản đồ)
-      </a>`;
-      showToast("Đã ghi nhận tọa độ GPS thực địa!", "success");
-    },
-    (err) => {
-      gpsBtn.disabled = false;
-      gpsBtn.innerHTML = '<i class="bi bi-geo-alt me-1"></i>Thử lại GPS';
-      showToast("Chưa bật quyền định vị GPS trên thiết bị!", "warning");
-    },
-    { enableHighAccuracy: true, timeout: 9000 }
-  );
+  fetchGpsAutomatically(true);
 }
 
 /**
- * 4. XỬ LÝ GỬI BÁO CÁO (HỖ TRỢ ĐỒNG THỜI NHIỀU NGƯỜI BÁO CÁO CÙNG LÚC)
+ * 4. XỬ LÝ GỬI BÁO CÁO (TIẾP NHẬN ĐỒNG THỜI CAO 24/24)
  */
 async function handleFormSubmit(event) {
   event.preventDefault();
@@ -556,7 +651,7 @@ async function handleFormSubmit(event) {
   const status = document.getElementById("appraisalStatus").value;
 
   if (!officerName) {
-    showToast("Vui lòng chọn tên cán bộ thẩm định!", "danger");
+    showToast("Vui lòng chọn tên cán bộ thực hiện!", "danger");
     return;
   }
 
@@ -591,8 +686,6 @@ async function handleFormSubmit(event) {
       imageUrl = await fileToDataUrl(selectedImageFile);
     }
 
-    // TẠO ĐỐI TƯỢNG BÁO CÁO VỚI ID ĐỘC NHẤT (UUID TIMESTAMP)
-    // Đảm bảo hàng chục người cùng gửi 1 mili-giây không bao giờ đè dữ liệu của nhau
     const uniqueId = "rep_" + Date.now() + "_" + Math.random().toString(36).substring(2, 8);
     const nowIso = new Date().toISOString();
 
@@ -614,32 +707,32 @@ async function handleFormSubmit(event) {
       created_at: nowIso
     };
 
-    // 1. Lưu tại máy mình và đưa lên đầu bảng lập tức
+    // 1. Cập nhật ngay tại máy
     currentReports.unshift(reportData);
     sortReportsByDateTime();
     saveLocalReports(currentReports);
     renderAllTables(reportData.id);
 
-    // 2. Phát tín hiệu Realtime 24/24 đến TẤT CẢ các máy khác trên toàn hệ thống
+    // 2. Phát Realtime 24/24 sang toàn bộ các máy khác
     publishRealtimeMessage(APP_CONFIG.REALTIME_TOPIC, {
       type: "NEW_REPORT",
       data: reportData
     });
 
-    // 3. Lưu vào Supabase nếu có cấu hình
+    // 3. Lưu vào Supabase nếu có
     if (isConfigured && supabaseClient) {
       await supabaseClient.from("reports").insert([reportData]);
     }
 
-    showToast("Đã gửi báo cáo thành công! Bản ghi đã hiển thị ngay ở bảng phía dưới.", "success");
+    showToast("Đã gửi báo cáo thành công! Dữ liệu đã xuất hiện ngay ở bảng phía dưới.", "success");
 
-    // Cuộn mượt xuống bảng ghi nhận phía dưới để nhân viên nhìn thấy ngay
+    // Cuộn mượt xuống bảng ghi nhận phía dưới
     setTimeout(() => {
       const publicTableSection = document.getElementById("publicStaffReportsSection");
       if (publicTableSection) {
         publicTableSection.scrollIntoView({ behavior: "smooth", block: "start" });
       }
-    }, 300);
+    }, 250);
 
     // Reset Form
     document.getElementById("customerName").value = "";
@@ -678,22 +771,16 @@ function renderAllTables(highlightId = null) {
   renderOfficerPerformanceDashboard(currentReports);
 }
 
-/**
- * BẢNG GHI NHẬN BÁO CÁO DÀNH CHO NHÂN VIÊN (NẰM NGAY PHÍA DƯỚI FORM)
- * Tự động sắp xếp theo ngày giờ báo cáo mới nhất lên đầu
- */
 function renderPublicStaffReportsTable(highlightId = null) {
   const tbody = document.getElementById("publicStaffTableBody");
   const countEl = document.getElementById("publicRecordCount");
   if (!tbody) return;
 
-  // Lọc theo cán bộ hoặc tìm kiếm nếu có
   const searchVal = (document.getElementById("publicStaffSearchInput")?.value || "").toLowerCase().trim();
   const selectedOfficer = document.getElementById("officerName")?.value || "";
 
   let list = currentReports;
 
-  // Nếu người dùng chọn chế độ "Chỉ xem báo cáo của tôi"
   if (filterOnlyMyReports && selectedOfficer) {
     list = list.filter(r => r.officer_name === selectedOfficer);
   }
@@ -753,7 +840,7 @@ function renderPublicStaffReportsTable(highlightId = null) {
         ${gpsLink}
       </td>
       <td>
-        <div class="fw-semibold text-dark">${escapeHtml(item.customer_name || 'Khách hàng')}</div>
+        <div class="fw-semibold text-dark">${escapeHtml(item.customer_name || 'Khách hàng / Công việc')}</div>
         <div class="text-muted small text-truncate" style="max-width: 180px;">${escapeHtml(item.address || '')}</div>
       </td>
       <td>
@@ -1205,7 +1292,6 @@ async function deleteSingleReport(id) {
     saveLocalReports(currentReports);
     renderAllTables();
 
-    // Phát tín hiệu Realtime xóa trên mọi máy
     publishRealtimeMessage(APP_CONFIG.REALTIME_TOPIC + "/action", {
       type: "DELETE_REPORTS",
       ids: [id]
@@ -1259,7 +1345,6 @@ async function deleteSelectedReports() {
     saveLocalReports(currentReports);
     renderAllTables();
 
-    // Phát tín hiệu Realtime đồng bộ xóa trên toàn hệ thống
     publishRealtimeMessage(APP_CONFIG.REALTIME_TOPIC + "/action", {
       type: "DELETE_REPORTS",
       ids: idsToDelete
@@ -1357,7 +1442,6 @@ function setupEventListeners() {
     });
   }
 
-  // Bộ lọc của bảng nhân viên phía dưới
   const publicSearch = document.getElementById("publicStaffSearchInput");
   if (publicSearch) {
     publicSearch.addEventListener("input", () => renderPublicStaffReportsTable());
@@ -1386,7 +1470,7 @@ function exportReportsToCSV() {
     return;
   }
 
-  const headers = ["STT", "Thời gian báo cáo", "Cán bộ thẩm định", "Khách hàng", "Địa chỉ", "Ngày bắt đầu", "Giờ bắt đầu", "Ngày kết thúc", "Giờ kết thúc", "Nội dung", "Kết quả", "Trạng thái", "Link ảnh"];
+  const headers = ["STT", "Thời gian báo cáo", "Cán bộ thực hiện", "Khách hàng / Công việc", "Địa chỉ", "Ngày bắt đầu", "Giờ bắt đầu", "Ngày kết thúc", "Giờ kết thúc", "Nội dung", "Kết quả", "Trạng thái", "Link ảnh"];
   let csvContent = "\uFEFF" + headers.join(",") + "\n";
 
   currentReports.forEach((r, idx) => {
@@ -1411,7 +1495,7 @@ function exportReportsToCSV() {
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `Bao_Cao_Tham_Dinh_${new Date().toISOString().split('T')[0]}.csv`;
+  link.download = `Bao_Cao_Giam_Sat_Cong_Viec_${new Date().toISOString().split('T')[0]}.csv`;
   link.click();
   showToast("Đã xuất file Excel / CSV thành công!", "success");
 }
