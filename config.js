@@ -19,7 +19,7 @@ const APP_CONFIG = {
 
   // 4. Cấu hình Đồng Bộ Google Drive & Google Sheets (Tùy chọn)
   // URL Web App triển khai từ Google Apps Script (Code.gs)
-  GOOGLE_DRIVE_URL: "",
+  GOOGLE_DRIVE_URL: "https://script.google.com/macros/s/AKfycbxkVoQdpYgGiixaly7CQ9fsM-FAyWwKzpIFd5i0g4cHT_Z7XMwVTVg1ji8XzbwHCnHE/exec",
 
   // 5. Danh sách cán bộ khởi tạo ban đầu
   INITIAL_OFFICERS: [
