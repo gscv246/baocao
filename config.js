@@ -11,8 +11,8 @@ const APP_CONFIG = {
   REALTIME_TOPIC: "gscv246/baocao/realtime_feed",
 
   // 2. Cấu hình Backend Serverless Supabase (Tùy chọn lưu trữ đám mây vĩnh viễn)
-  SUPABASE_URL: "",       
-  SUPABASE_ANON_KEY: "",  
+  SUPABASE_URL: "https://xjqemtunfeqqkwctinrs.supabase.co",       
+  SUPABASE_ANON_KEY: "sb_publishable_pCD8gYv1lwA_QVFMTDWM3A_N_XrOPf0",  
 
   // 3. Mật mã Quản trị viên (Admin PIN) để vào trang quản trị
   ADMIN_PIN: "123456",
