@@ -57,6 +57,7 @@ function initSystem() {
   }
 
   currentReports = getLocalReports();
+  loadReportsFromServer();
   renderAllTables();
 }
 
@@ -179,6 +180,7 @@ function publishRealtimeMessage(topic, dataObj) {
 }
 
 function mergeReportsData(incomingReports) {
+  if (isConfigured && supabaseClient) return;
   let hasChange = false;
   const map = new Map();
   currentReports.forEach(r => map.set(String(r.id), r));
@@ -780,7 +782,11 @@ async function handleFormSubmit(event) {
 
     // 4. Lưu vào Supabase nếu có
     if (isConfigured && supabaseClient) {
-      await supabaseClient.from("reports").insert([reportData]);
+      const { error: insErr } = await supabaseClient.from("reports").insert([reportData]);
+      if (insErr) {
+        console.warn("Lỗi lưu báo cáo lên máy chủ:", insErr);
+        showToast("Báo cáo chưa lưu được lên máy chủ: " + insErr.message, "warning");
+      }
     }
 
     showToast("Đã gửi báo cáo thành công! Dữ liệu đã xuất hiện ngay ở bảng phía dưới.", "success");
@@ -2009,7 +2015,12 @@ async function deleteSingleReport(id) {
     });
 
     if (isConfigured && supabaseClient) {
-      await supabaseClient.from("reports").delete().eq("id", id);
+      const { error: delErr } = await supabaseClient.from("reports").delete().eq("id", id);
+      if (delErr) {
+        showToast("Xóa trên máy chủ thất bại: " + delErr.message, "danger");
+        loadReportsFromServer();
+        return;
+      }
     }
     showToast("Đã xóa báo cáo thành công!", "success");
   } catch (err) {
@@ -2062,7 +2073,12 @@ async function deleteSelectedReports() {
     });
 
     if (isConfigured && supabaseClient) {
-      await supabaseClient.from("reports").delete().in("id", idsToDelete);
+      const { error: delErr } = await supabaseClient.from("reports").delete().in("id", idsToDelete);
+      if (delErr) {
+        showToast("Xóa trên máy chủ thất bại: " + delErr.message, "danger");
+        loadReportsFromServer();
+        return;
+      }
     }
 
     showToast(`Đã xóa thành công ${idsToDelete.length} báo cáo!`, "success");
@@ -2090,7 +2106,12 @@ async function deleteAllReports() {
     });
 
     if (isConfigured && supabaseClient) {
-      await supabaseClient.from("reports").delete().neq("id", "0");
+      const { error: delErr } = await supabaseClient.from("reports").delete().neq("id", "0");
+      if (delErr) {
+        showToast("Xóa trên máy chủ thất bại: " + delErr.message, "danger");
+        loadReportsFromServer();
+        return;
+      }
     }
     showToast("Đã xóa sạch toàn bộ dữ liệu báo cáo!", "success");
   } catch (err) {
@@ -2535,3 +2556,29 @@ async function saveRemoteAdminHash(hash) {
     return false;
   }
 }
+
+async function loadReportsFromServer() {
+  if (!(isConfigured && supabaseClient)) return;
+  try {
+    const { data, error } = await supabaseClient
+      .from("reports")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(1000);
+    if (error || !Array.isArray(data)) return;
+    currentReports = data;
+    sortReportsByDateTime();
+    saveLocalReports(currentReports);
+    renderAllTables();
+  } catch (e) {
+    console.warn("Không tải được báo cáo từ máy chủ:", e);
+  }
+}
+
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") loadReportsFromServer();
+});
+
+setInterval(() => {
+  if (!document.querySelector(".report-select-checkbox:checked")) loadReportsFromServer();
+}, 60000);
