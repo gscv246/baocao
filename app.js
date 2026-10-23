@@ -1353,7 +1353,15 @@ async function handleGatewayLogin(event) {
 
     const currentAdminPass = localStorage.getItem("app_admin_password") || APP_CONFIG.ADMIN_PIN || "123456";
 
-    if (password !== currentAdminPass) {
+    const remoteAdminHash = await fetchRemoteAdminHash();
+    let isAdminPasswordCorrect;
+    if (remoteAdminHash) {
+      isAdminPasswordCorrect = (await sha256Hex(password)) === remoteAdminHash;
+    } else {
+      isAdminPasswordCorrect = (password === currentAdminPass);
+    }
+
+    if (!isAdminPasswordCorrect) {
       const state = registerFailedPasswordAttempt(adminKey);
       const newLock = checkAccountLockStatus(adminKey);
 
@@ -1385,7 +1393,7 @@ async function handleGatewayLogin(event) {
 
     // KIỂM TRA LẦN ĐĂNG NHẬP ĐẦU TIÊN (HOẶC VẪN DÙNG PASS MẶC ĐỊNH 123456)
     const hasChanged = localStorage.getItem("app_admin_password_changed") === "true";
-    if (!hasChanged || currentAdminPass === "123456") {
+    if (!remoteAdminHash && (!hasChanged || currentAdminPass === "123456")) {
       setTimeout(() => {
         openAdminChangePasswordModal(true); // isForced = true
       }, 500);
@@ -1540,7 +1548,7 @@ function openAdminChangePasswordModal(isForced = false) {
   modal.show();
 }
 
-function handleAdminChangePasswordSubmit(event) {
+async function handleAdminChangePasswordSubmit(event) {
   event.preventDefault();
   const currentPass = document.getElementById("adminCurrentPassword").value.trim();
   const newPass = document.getElementById("adminNewPassword").value.trim();
@@ -1548,7 +1556,12 @@ function handleAdminChangePasswordSubmit(event) {
 
   const realPass = localStorage.getItem("app_admin_password") || APP_CONFIG.ADMIN_PIN || "123456";
 
-  if (currentPass !== realPass) {
+  const remoteAdminHash = await fetchRemoteAdminHash();
+  const isCurrentCorrect = remoteAdminHash
+    ? (await sha256Hex(currentPass)) === remoteAdminHash
+    : currentPass === realPass;
+
+  if (!isCurrentCorrect) {
     showToast("Mật khẩu hiện tại không chính xác!", "danger");
     return;
   }
@@ -1570,7 +1583,10 @@ function handleAdminChangePasswordSubmit(event) {
 
   localStorage.setItem("app_admin_password", newPass);
   localStorage.setItem("app_admin_password_changed", "true");
-
+const savedRemote = await saveRemoteAdminHash(await sha256Hex(newPass));
+  if (!savedRemote && isConfigured) {
+    showToast("Không lưu được mật khẩu lên máy chủ. Mật khẩu mới chỉ có hiệu lực trên máy này!", "warning");
+  }
   const modalEl = document.getElementById("adminChangePasswordModal");
   const modal = bootstrap.Modal.getInstance(modalEl);
   if (modal) modal.hide();
@@ -2486,4 +2502,35 @@ function triggerGoogleDriveQuickSync() {
     return;
   }
   syncAllReportsToGoogleDrive();
+}
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function fetchRemoteAdminHash() {
+  if (!(isConfigured && supabaseClient)) return null;
+  try {
+    const { data, error } = await supabaseClient
+      .from("app_settings")
+      .select("value")
+      .eq("key", "admin_password_hash")
+      .maybeSingle();
+    if (error || !data) return null;
+    return data.value;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function saveRemoteAdminHash(hash) {
+  if (!(isConfigured && supabaseClient)) return false;
+  try {
+    const { error } = await supabaseClient
+      .from("app_settings")
+      .upsert({ key: "admin_password_hash", value: hash });
+    return !error;
+  } catch (e) {
+    return false;
+  }
 }
